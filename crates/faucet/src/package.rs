@@ -5,7 +5,7 @@ use cargo_miden::{OutputType, run};
 use miden_client::Deserializable;
 use miden_client::vm::Package;
 
-/// Builds a Miden project in the specified directory
+/// Compiles a Miden project in the specified directory
 ///
 /// # Arguments
 /// * `dir` - Path to the directory containing the Cargo.toml
@@ -16,8 +16,7 @@ use miden_client::vm::Package;
 ///
 /// # Errors
 /// Returns an error if compilation fails or if the output is not in the expected format
-pub fn build_project_in_dir(dir: &Path, release: bool) -> anyhow::Result<Package> {
-    // TODO: use enum for profile flag
+pub fn compile_dir(dir: &Path, release: bool) -> anyhow::Result<Package> {
     let profile = if release { "--release" } else { "--debug" };
     let manifest_path = dir.join("Cargo.toml");
     let manifest_arg = manifest_path.to_string_lossy();

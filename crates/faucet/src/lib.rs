@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::iter::repeat;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -38,7 +39,7 @@ pub mod requests;
 pub mod types;
 
 use crate::note_screener::NoteScreener;
-use crate::package::build_project_in_dir;
+use crate::package::compile_dir;
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
@@ -142,9 +143,8 @@ impl Faucet {
 
         // Compile the mint tx script from Rust via cargo-miden.
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let package = build_project_in_dir(&workspace_root.join("../contracts/mint-tx"), true)?;
+        let package = compile_dir(&workspace_root.join("../contracts/mint-tx"), true)?;
         let program = package.unwrap_program();
-        // TODO: use client.code_builder()?
         let script =
             TransactionScript::from_parts(program.mast_forest().clone(), program.entrypoint());
         client.set_setting(MINT_TX_SCRIPT_SETTING.to_string(), script).await?;
@@ -414,21 +414,16 @@ impl Faucet {
             note_data.push(Felt::new(amount));
         }
         // Pad to word alignment for pipe_words_to_memory
-        // TODO: avoid while to do this
-        while note_data.len() % 4 != 0 {
-            note_data.push(Felt::ZERO);
-        }
+        note_data.extend(repeat(Felt::ZERO).take(4 - note_data.len() % 4));
         let note_data_commitment = Rpo256::hash_elements(&note_data);
         let advice_map = [(note_data_commitment, note_data)];
-
-        let script_with_advice =
-            self.script.clone().with_advice_map(advice_map.into_iter().collect());
 
         let expected_output_recipients: Vec<_> =
             notes.iter().map(Note::recipient).cloned().collect();
 
         TransactionRequestBuilder::new()
-            .custom_script(script_with_advice)
+            .custom_script(self.script.clone())
+            .extend_advice_map(advice_map)
             .expected_output_recipients(expected_output_recipients)
             .script_arg(note_data_commitment)
             .build()
@@ -647,7 +642,7 @@ mod tests {
 
         // Compile the faucet account component from Rust
         let faucet_component_package =
-            build_project_in_dir(Path::new("../contracts/faucet-account"), true).unwrap();
+            compile_dir(Path::new("../contracts/faucet-account"), true).unwrap();
         let faucet_component =
             AccountComponent::from_package(&faucet_component_package, &InitStorageData::default())
                 .unwrap();
@@ -681,7 +676,7 @@ mod tests {
         client.ensure_genesis_in_place().await.unwrap();
         client.add_account(&account, false).await.unwrap();
 
-        let package = build_project_in_dir(Path::new("../contracts/mint-tx"), true).unwrap();
+        let package = compile_dir(Path::new("../contracts/mint-tx"), true).unwrap();
         let program = package.unwrap_program();
         let script =
             TransactionScript::from_parts(program.mast_forest().clone(), program.entrypoint());

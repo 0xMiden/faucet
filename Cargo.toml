@@ -1,6 +1,13 @@
 [workspace]
-members = ["bin/faucet", "bin/faucet-client", "crates/faucet", "crates/pow", "crates/contracts/mint-tx", "crates/contracts/faucet-account"]
 default-members = ["bin/faucet", "crates/faucet", "crates/pow"]
+members = [
+  "bin/faucet",
+  "bin/faucet-client",
+  "crates/contracts/faucet-account",
+  "crates/contracts/mint-tx",
+  "crates/faucet",
+  "crates/pow",
+]
 
 resolver = "2"
 
@@ -24,11 +31,11 @@ miden-faucet-lib       = { path = "crates/faucet", version = "0.14.0" }
 miden-pow-rate-limiter = { path = "crates/pow", version = "0.14.0" }
 
 # Miden dependencies.
+cargo-miden               = { branch = "next", git = "https://github.com/0xMiden/compiler" }
+miden                     = { version = "0.11" }
 miden-client              = { version = "0.14" }
 miden-client-cli          = { version = "0.14" }
 miden-client-sqlite-store = { version = "0.14" }
-miden = { version = "0.11" }
-cargo-miden = { git = "https://github.com/0xMiden/compiler", branch = "next" }
 
 # External dependencies
 anyhow                = { version = "1.0" }

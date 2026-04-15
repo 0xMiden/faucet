@@ -1,11 +1,11 @@
 [package]
-name = "miden-faucet-mint-tx"
 authors.workspace      = true
 description            = "Miden faucet's mint transaction script"
 edition.workspace      = true
 homepage.workspace     = true
-keywords               = ["mint", "miden", "faucet"]
+keywords               = ["faucet", "miden", "mint"]
 license.workspace      = true
+name                   = "miden-faucet-mint-tx"
 readme                 = "README.md"
 repository.workspace   = true
 rust-version.workspace = true
