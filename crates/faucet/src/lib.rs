@@ -39,7 +39,7 @@ pub mod requests;
 pub mod types;
 
 use crate::note_screener::NoteScreener;
-use crate::package::compile_dir;
+use crate::package::{compile_dir_with_libs, write_faucet_component_masl};
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
@@ -141,12 +141,18 @@ impl Faucet {
         }
         client.set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), account.id()).await?;
 
-        // Compile the mint tx script from Rust via cargo-miden.
+        // Compile the mint tx script from Rust via cargo-miden, linking the official
+        // BasicFungibleFaucet account component so that `account.mint_and_send()` resolves
+        // to the correct procedure digest.
         let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let package = compile_dir(&workspace_root.join("../contracts/mint-tx"), true)?;
-        let program = package.unwrap_program();
-        let script =
-            TransactionScript::from_parts(program.mast_forest().clone(), program.entrypoint());
+        let tmp_dir = std::env::temp_dir().join("miden-faucet-build");
+        let faucet_masl = write_faucet_component_masl(&tmp_dir)?;
+        let package = compile_dir_with_libs(
+            &workspace_root.join("../contracts/mint-tx"),
+            true,
+            &[&faucet_masl],
+        )?;
+        let script = TransactionScript::new(package.unwrap_program());
         client.set_setting(MINT_TX_SCRIPT_SETTING.to_string(), script).await?;
 
         if deploy {
@@ -559,13 +565,9 @@ fn build_p2id_notes(
 mod tests {
     use std::env::temp_dir;
 
-    use miden_client::account::component::{AuthControlled, InitStorageData};
-    use miden_client::account::{
-        AccountBuilder,
-        AccountComponent,
-        AccountStorageMode,
-        AccountType,
-    };
+    use miden_client::account::component::AuthControlled;
+    use miden_client::account::{AccountBuilder, AccountStorageMode, AccountType};
+    use miden_client::asset::TokenSymbol;
     use miden_client::auth::{AuthSchemeId, AuthSecretKey, AuthSingleSig};
     use miden_client::crypto::rpo_falcon512::SecretKey;
     use miden_client::store::{NoteFilter, Store};
@@ -576,6 +578,12 @@ mod tests {
 
     use super::*;
     use crate::types::NoteType;
+
+    #[test]
+    fn generate_faucet_component_masl() {
+        let mint_tx_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../contracts/mint-tx");
+        write_faucet_component_masl(&mint_tx_dir).unwrap();
+    }
 
     #[tokio::test]
     async fn tx_script_compiles_and_executes() {
@@ -640,17 +648,13 @@ mod tests {
     async fn build_faucet(store: Arc<dyn Store>) -> Faucet {
         let secret = SecretKey::new();
 
-        // Compile the faucet account component from Rust
-        let faucet_component_package =
-            compile_dir(Path::new("../contracts/faucet-account"), true).unwrap();
-        let faucet_component =
-            AccountComponent::from_package(&faucet_component_package, &InitStorageData::default())
-                .unwrap();
+        let symbol = TokenSymbol::new("TEST").unwrap();
+        let max_supply = Felt::try_from(1_000_000_000_000_u64).unwrap();
 
         let account = AccountBuilder::new(rand::random())
             .account_type(AccountType::FungibleFaucet)
             .storage_mode(AccountStorageMode::Public)
-            .with_component(faucet_component)
+            .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
             .with_component(AuthControlled::allow_all())
             .with_auth_component(AuthSingleSig::new(
                 secret.public_key().to_commitment().into(),
@@ -676,7 +680,11 @@ mod tests {
         client.ensure_genesis_in_place().await.unwrap();
         client.add_account(&account, false).await.unwrap();
 
-        let package = compile_dir(Path::new("../contracts/mint-tx"), true).unwrap();
+        let tmp_dir = temp_dir().join(format!("miden-faucet-build-{}", Uuid::new_v4()));
+        let faucet_masl = write_faucet_component_masl(&tmp_dir).unwrap();
+        let package =
+            compile_dir_with_libs(Path::new("../contracts/mint-tx"), true, &[&faucet_masl])
+                .unwrap();
         let program = package.unwrap_program();
         let script =
             TransactionScript::from_parts(program.mast_forest().clone(), program.entrypoint());

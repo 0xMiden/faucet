@@ -23,9 +23,5 @@ package = "miden:mint-tx"
 [package.metadata.miden]
 project-kind = "transaction-script"
 
-# Miden dependencies for cargo-miden build/linking
-[package.metadata.miden.dependencies]
-"miden:faucet-account" = { path = "../faucet-account" }
-
 [package.metadata.component.target.dependencies]
 "miden:faucet-account" = { path = "../faucet-account/target/generated-wit/" }

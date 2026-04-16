@@ -3,27 +3,34 @@ use std::path::Path;
 use anyhow::{Context, bail};
 use cargo_miden::{OutputType, run};
 use miden_client::Deserializable;
+use miden_client::utils::Serializable;
 use miden_client::vm::Package;
+use miden_standards::account::components::basic_fungible_faucet_library;
 
-/// Compiles a Miden project in the specified directory
-///
-/// # Arguments
-/// * `dir` - Path to the directory containing the Cargo.toml
-/// * `release` - Whether to build in release mode
-///
-/// # Returns
-/// The compiled `Package`
-///
-/// # Errors
-/// Returns an error if compilation fails or if the output is not in the expected format
-pub fn compile_dir(dir: &Path, release: bool) -> anyhow::Result<Package> {
+/// Compiles a Miden project, optionally linking additional libraries.
+pub fn compile_dir_with_libs(
+    dir: &Path,
+    release: bool,
+    link_libraries: &[&Path],
+) -> anyhow::Result<Package> {
     let profile = if release { "--release" } else { "--debug" };
     let manifest_path = dir.join("Cargo.toml");
     let manifest_arg = manifest_path.to_string_lossy();
 
-    let args = vec!["cargo", "miden", "build", profile, "--manifest-path", &manifest_arg];
+    let mut args = vec![
+        "cargo".to_string(),
+        "miden".to_string(),
+        "build".to_string(),
+        profile.to_string(),
+        "--manifest-path".to_string(),
+        manifest_arg.to_string(),
+    ];
+    for lib_path in link_libraries {
+        args.push("--link-library".to_string());
+        args.push(lib_path.to_string_lossy().to_string());
+    }
 
-    let output = run(args.into_iter().map(String::from), OutputType::Masm)
+    let output = run(args.into_iter(), OutputType::Masm)
         .context("Failed to compile project")?
         .context("Cargo miden build returned None")?;
 
@@ -43,4 +50,19 @@ pub fn compile_dir(dir: &Path, release: bool) -> anyhow::Result<Package> {
         .context(format!("Failed to read compiled package from {}", artifact_path.display()))?;
 
     Package::read_from_bytes(&package_bytes).context("Failed to deserialize package from bytes")
+}
+
+/// Writes the official `BasicFungibleFaucet` account component as a `.masl` library
+/// to the given directory, returning the path to the written file.
+///
+/// The Miden compiler (`cargo miden`) accepts `.masl` libraries as link libraries
+/// via `--link-library`.
+pub fn write_faucet_component_masl(dir: &Path) -> anyhow::Result<std::path::PathBuf> {
+    let lib = basic_fungible_faucet_library();
+
+    std::fs::create_dir_all(dir)?;
+    let masl_path = dir.join("basic_fungible_faucet.masl");
+    std::fs::write(&masl_path, lib.to_bytes()).context("Failed to write faucet .masl")?;
+
+    Ok(masl_path)
 }

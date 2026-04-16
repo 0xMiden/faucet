@@ -1,9 +1,9 @@
-//! Faucet account component.
+//! Faucet account component stub.
 //!
-//! This component exposes the `mint_and_send` procedure for the faucet account. It uses kernel
-//! procedures (`faucet::create_fungible_asset`, `faucet::mint`, `output_note::create`,
-//! `output_note::add_asset`) which can only be called from within an account component context —
-//! not directly from a transaction script.
+//! This crate exists only to generate the WIT interface for the `mint_and_send` procedure.
+//! The actual account component used at runtime is the official `BasicFungibleFaucet` from
+//! `miden-standards`. The `.masp` produced by compiling this crate is NOT used for linking —
+//! instead, the faucet library links the official component library via `--link-library`.
 
 #![no_std]
 #![feature(alloc_error_handler)]
@@ -16,12 +16,6 @@ struct FaucetAccount;
 #[component]
 impl FaucetAccount {
     /// Mints a fungible asset and sends it to `recipient` by creating an output note.
-    ///
-    /// # Arguments
-    /// - `amount`: the number of tokens to mint (in base units)
-    /// - `tag`: the note tag included in the output note metadata
-    /// - `note_type`: the visibility of the note (public or private)
-    /// - `recipient`: the note recipient digest
     pub fn mint_and_send(
         &mut self,
         amount: Felt,
