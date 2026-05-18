@@ -65,7 +65,7 @@ jobs:
           rustup target add ${{ matrix.target }}
       - name: Build miden-faucet-client
         run: |
-          BUILD_TARGET=${{ matrix.target }} make build-artifact
+          BUILD_TARGET=${{ matrix.target }} make build-faucet-client
       - name: Prepare artifact
         run: |
           mv target/${{ matrix.target }}/release/miden-faucet-client miden-faucet-client-${{ matrix.target }}

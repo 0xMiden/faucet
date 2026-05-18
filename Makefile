@@ -16,8 +16,8 @@ WARNINGS=RUSTDOCFLAGS="-D warnings"
 build: ## By default we should build in release mode
 	cargo build --release
 
-.PHONY: build-artifact
-build-artifact: ## Build triple-specific binaries
+.PHONY: build-faucet-client
+build-faucet-client: ## Build triple-specific miden-faucet-client binary
 	cargo build --package miden-faucet-client --target $(BUILD_TARGET) --release
 
 # -- linting --------------------------------------------------------------------------------------
