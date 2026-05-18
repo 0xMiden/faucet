@@ -3,7 +3,6 @@ default-members = ["bin/faucet", "crates/faucet", "crates/pow"]
 members = [
   "bin/faucet",
   "bin/faucet-client",
-  "crates/contracts/faucet-account",
   "crates/contracts/mint-tx",
   "crates/faucet",
   "crates/pow",

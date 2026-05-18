@@ -26,7 +26,7 @@
 //!
 //! # Account component
 //!
-//! The script calls `account.mint_and_send()` from the faucet account component, which internally
+//! The script calls `account.mint()` from the faucet account component, which internally
 //! creates a fungible asset, mints it via the kernel, and creates an output note with the asset.
 
 #![no_std]
@@ -34,7 +34,7 @@
 
 use miden::intrinsics::advice::adv_push_mapvaln;
 use miden::tx::update_expiration_block_delta;
-use miden::{Felt, Recipient, Word, pipe_words_to_memory, tx_script};
+use miden::{Felt, Recipient, Word, output_note, pipe_words_to_memory, tx_script};
 
 use crate::bindings::Account;
 
@@ -72,6 +72,9 @@ fn run(arg: Word, account: &mut Account) {
         let tag = input[start + 5].into();
         let amount = input[start + 6];
 
-        account.mint_and_send(amount, tag, note_type, recipient);
+        let asset = account.create_fungible_asset(amount);
+        faucet::mint(asset);
+        let note_idx = output_note::create(tag, note_type, recipient);
+        output_note::add_asset(asset, note_idx);
     }
 }
