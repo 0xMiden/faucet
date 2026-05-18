@@ -1,6 +1,6 @@
 {
   "name": "miden-faucet-frontend",
-  "version": "v.0.12.0",
+  "version": "v.0.14.1",
   "description": "Miden Faucet Frontend",
   "main": "index.js",
   "scripts": {
@@ -15,7 +15,7 @@
   "dependencies": {
     "@demox-labs/miden-wallet-adapter-base": "^0.10.0",
     "@demox-labs/miden-wallet-adapter-miden": "^0.10.0",
-    "@miden-sdk/miden-sdk": "^0.14.0"
+    "@miden-sdk/miden-sdk": "^0.14.3"
   },
   "devDependencies": {
     "esbuild": "^0.27.0"

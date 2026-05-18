@@ -440,20 +440,21 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let max_supply = AssetAmount::new(faucet_component.max_supply().as_canonical_u64())?;
             let decimals = faucet_component.decimals();
 
+            let note_transport_client = note_transport_url.as_ref().map(|url| {
+                Arc::new(GrpcNoteTransportClient::new(
+                    url.to_string(),
+                    timeout.as_millis().try_into().expect("timeout should fit into u64"),
+                ))
+            });
+
             let metadata = Metadata {
                 id: faucet.faucet_id(),
                 max_supply,
                 decimals,
                 explorer_url,
                 base_amount,
+                note_transport_url,
             };
-
-            let note_transport_client = note_transport_url.map(|url| {
-                Arc::new(GrpcNoteTransportClient::new(
-                    url.to_string(),
-                    timeout.as_millis().try_into().expect("timeout should fit into u64"),
-                ))
-            });
 
             // We keep a channel sender open in the main thread to avoid the faucet closing before
             // servers can propagate any errors.

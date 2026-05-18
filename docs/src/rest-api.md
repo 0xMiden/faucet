@@ -57,7 +57,7 @@ For detailed information about the token request flow, see the [Architecture](./
 
 ### Get Metadata
 
-**Endpoint**: `GET /metadata`
+**Endpoint**: `GET /get_metadata`
 
 - **Purpose**: Request the faucet metadata to show on the frontend
 
@@ -67,6 +67,7 @@ For detailed information about the token request flow, see the [Architecture](./
   - `max_supply` (number): maximum available supply of the faucet (in base units)
   - `decimals` (number): number of decimals of the token minted by the faucet. It is needed to convert base units into token amounts.
   - `explorer_url` (string): URL to view the transaction in the explorer. Only present if available for the current network.
+  - `note_transport_url` (string): URL of the note transport layer (NTL) endpoint used by the faucet. Only present if the faucet was configured with `--note-transport-url`.
 
 ### Get Note
 
