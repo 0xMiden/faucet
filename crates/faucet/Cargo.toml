@@ -16,7 +16,6 @@ workspace = true
 
 [dependencies]
 # Miden dependencies.
-cargo-miden               = { workspace = true }
 miden-client              = { features = ["tonic"], workspace = true }
 miden-client-sqlite-store = { workspace = true }
 miden-standards           = { version = "0.14" }

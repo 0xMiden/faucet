@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use anyhow::{Context, bail};
-use cargo_miden::{OutputType, run};
 use miden_client::Deserializable;
 use miden_client::utils::Serializable;
 use miden_client::vm::Package;
