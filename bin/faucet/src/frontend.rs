@@ -58,7 +58,7 @@ pub async fn get_index_html() -> Html<&'static str> {
 pub async fn get_miden_client_web_wasm(request: Request) -> Response {
     const WASM_BYTES: &[u8] = include_bytes!(concat!(
         env!("OUT_DIR"),
-        "/frontend/node_modules/@miden-sdk/miden-sdk/dist/assets/miden_client_web.wasm"
+        "/frontend/node_modules/@miden-sdk/miden-sdk/dist/st/assets/miden_client_web.wasm"
     ));
 
     let etag = compute_etag(WASM_BYTES);
