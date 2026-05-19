@@ -1,0 +1,3 @@
+[toolchain]
+channel = "0.14.0"
+components = ["cargo-miden"]

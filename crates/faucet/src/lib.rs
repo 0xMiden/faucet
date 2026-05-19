@@ -34,12 +34,13 @@ use tracing::{Instrument, error, info, info_span, instrument, warn};
 use url::Url;
 
 mod note_screener;
-mod package;
 pub mod requests;
 pub mod types;
 
+use miden_client::Deserializable;
+use miden_client::vm::Package;
+
 use crate::note_screener::NoteScreener;
-use crate::package::{compile_dir_with_libs, write_faucet_component_masl};
 use crate::requests::{MintError, MintRequest, MintResponse, MintResponseSender};
 use crate::types::AssetAmount;
 
@@ -145,17 +146,10 @@ impl Faucet {
         }
         client.set_setting(DEFAULT_ACCOUNT_ID_SETTING.to_owned(), account.id()).await?;
 
-        // Compile the mint tx script from Rust via cargo-miden, linking the official
-        // BasicFungibleFaucet account component so that `account.mint_and_send()` resolves
-        // to the correct procedure digest.
-        let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let tmp_dir = std::env::temp_dir().join("miden-faucet-build");
-        let faucet_masl = write_faucet_component_masl(&tmp_dir)?;
-        let package = compile_dir_with_libs(
-            &workspace_root.join("../contracts/mint-tx"),
-            true,
-            &[&faucet_masl],
-        )?;
+        // The mint tx script package is built by build.rs and embedded into the binary.
+        let package_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/mint_tx.masp"));
+        let package = Package::read_from_bytes(package_bytes)
+            .context("failed to deserialize mint tx package")?;
         let script = TransactionScript::new(package.unwrap_program());
         client.set_setting(MINT_TX_SCRIPT_SETTING.to_string(), script).await?;
 
@@ -790,11 +784,8 @@ mod tests {
         client.ensure_genesis_in_place().await.unwrap();
         client.add_account(&account, false).await.unwrap();
 
-        let tmp_dir = temp_dir().join(format!("miden-faucet-build-{}", Uuid::new_v4()));
-        let faucet_masl = write_faucet_component_masl(&tmp_dir).unwrap();
-        let package =
-            compile_dir_with_libs(Path::new("../contracts/mint-tx"), true, &[&faucet_masl])
-                .unwrap();
+        let package_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/mint_tx.masp"));
+        let package = Package::read_from_bytes(package_bytes).unwrap();
         let program = package.unwrap_program();
         let script =
             TransactionScript::from_parts(program.mast_forest().clone(), program.entrypoint());

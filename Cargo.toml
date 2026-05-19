@@ -30,7 +30,6 @@ miden-faucet-lib       = { path = "crates/faucet", version = "0.15.0" }
 miden-pow-rate-limiter = { path = "crates/pow", version = "0.15.0" }
 
 # Miden dependencies.
-cargo-miden               = { version = "0.8.1" }
 miden                     = { version = "0.11" }
 miden-client              = { version = "0.14" }
 miden-client-cli          = { version = "0.14" }
