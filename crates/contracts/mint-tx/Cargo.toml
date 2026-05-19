@@ -22,6 +22,3 @@ package = "miden:mint-tx"
 
 [package.metadata.miden]
 project-kind = "transaction-script"
-
-[package.metadata.component.target.dependencies]
-"miden:faucet-account" = { path = "../faucet-account/target/generated-wit/" }

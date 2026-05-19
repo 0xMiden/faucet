@@ -34,9 +34,7 @@
 
 use miden::intrinsics::advice::adv_push_mapvaln;
 use miden::tx::update_expiration_block_delta;
-use miden::{Felt, Recipient, Word, output_note, pipe_words_to_memory, tx_script};
-
-use crate::bindings::Account;
+use miden::{Felt, Recipient, Word, faucet, output_note, pipe_words_to_memory, tx_script};
 
 /// Number of felts per note in the advice map data.
 ///
@@ -47,7 +45,7 @@ const NOTE_ARGS_SIZE: usize = 7;
 const EXPIRATION_DELTA: u32 = 10;
 
 #[tx_script]
-fn run(arg: Word, account: &mut Account) {
+fn run(arg: Word) {
     update_expiration_block_delta(Felt::from_u32(EXPIRATION_DELTA));
 
     // Push note data from the advice map onto the advice stack using the commitment as key.
@@ -72,7 +70,7 @@ fn run(arg: Word, account: &mut Account) {
         let tag = input[start + 5].into();
         let amount = input[start + 6];
 
-        let asset = account.create_fungible_asset(amount);
+        let asset = faucet::create_fungible_asset(amount);
         faucet::mint(asset);
         let note_idx = output_note::create(tag, note_type, recipient);
         output_note::add_asset(asset, note_idx);
