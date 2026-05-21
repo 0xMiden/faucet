@@ -23,9 +23,9 @@ miden-faucet-lib       = { path = "crates/faucet", version = "0.15.0" }
 miden-pow-rate-limiter = { path = "crates/pow", version = "0.15.0" }
 
 # Miden dependencies.
-miden-client              = { version = "0.14" }
-miden-client-cli          = { version = "0.14" }
-miden-client-sqlite-store = { version = "0.14" }
+miden-client              = { git = "https://github.com/0xMiden/miden-client", rev = "a73c5bb61583cf480b5dcd28fc494ac63032d2c5" }
+miden-client-cli          = { git = "https://github.com/0xMiden/miden-client", rev = "a73c5bb61583cf480b5dcd28fc494ac63032d2c5" }
+miden-client-sqlite-store = { git = "https://github.com/0xMiden/miden-client", rev = "a73c5bb61583cf480b5dcd28fc494ac63032d2c5" }
 
 # External dependencies
 anyhow                = { version = "1.0" }
@@ -65,3 +65,4 @@ module_name_repetitions     = "allow" # Many triggers, and is a stylistic choice
 must_use_candidate          = "allow" # This marks many fn's which isn't helpful.
 should_panic_without_expect = "allow" # We don't care about the specific panic message.
 # End of pedantic lints.
+

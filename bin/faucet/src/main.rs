@@ -13,7 +13,15 @@ use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use miden_client::account::component::{AuthControlled, BasicFungibleFaucet};
+use miden_client::account::component::{
+    BasicFungibleFaucet,
+    BurnPolicyConfig,
+    FungibleTokenMetadata,
+    MintPolicyConfig,
+    PolicyAuthority,
+    TokenName,
+    TokenPolicyManager,
+};
 use miden_client::account::{
     Account,
     AccountBuilder,
@@ -436,9 +444,9 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 baseline: pow_baseline,
             };
             let faucet_account = faucet.faucet_account().await?;
-            let faucet_component = BasicFungibleFaucet::try_from(&faucet_account)?;
-            let max_supply = AssetAmount::new(faucet_component.max_supply().as_canonical_u64())?;
-            let decimals = faucet_component.decimals();
+            let token_metadata = FungibleTokenMetadata::try_from(faucet_account.storage())?;
+            let max_supply = AssetAmount::new(token_metadata.max_supply().as_canonical_u64())?;
+            let decimals = token_metadata.decimals();
 
             let note_transport_client = note_transport_url.as_ref().map(|url| {
                 Arc::new(GrpcNoteTransportClient::new(
@@ -576,9 +584,10 @@ fn create_faucet_account(
     };
 
     let symbol = TokenSymbol::try_from(token_symbol).context("failed to parse token symbol")?;
-    let max_supply = Felt::try_from(max_supply)
-        .map_err(anyhow::Error::msg)
-        .context("max supply value is greater than or equal to the field modulus")?;
+    let name = TokenName::new(&symbol.to_string()).context("failed to derive token name")?;
+    let token_metadata = FungibleTokenMetadata::builder(name, symbol, decimals, max_supply)
+        .build()
+        .context("failed to build token metadata")?;
     let auth_component = AuthSingleSig::new(
         secret.public_key().to_commitment().into(),
         AuthSchemeId::Falcon512Poseidon2,
@@ -587,8 +596,13 @@ fn create_faucet_account(
     let account = AccountBuilder::new(rng.random())
         .account_type(AccountType::FungibleFaucet)
         .storage_mode(AccountStorageMode::Public)
-        .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
-        .with_component(AuthControlled::allow_all())
+        .with_component(token_metadata)
+        .with_component(BasicFungibleFaucet)
+        .with_components(TokenPolicyManager::new(
+            PolicyAuthority::AuthControlled,
+            MintPolicyConfig::AllowAll,
+            BurnPolicyConfig::AllowAll,
+        ))
         .with_auth_component(auth_component)
         .build()
         .context("failed to create basic fungible faucet account")?;

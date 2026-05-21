@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use miden_client::account::component::BasicFungibleFaucet;
+use miden_client::account::component::FungibleTokenMetadata;
 use miden_client::account::{Account, AccountId, Address, NetworkId};
 use miden_client::asset::FungibleAsset;
 use miden_client::auth::AuthSecretKey;
@@ -13,8 +13,8 @@ use miden_client::crypto::{RandomCoin, Rpo256};
 use miden_client::keystore::{FilesystemKeyStore, Keystore};
 use miden_client::note::{Note, NoteAttachment, NoteError, NoteId, P2idNote};
 use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, RpcError};
-use miden_client::store::{NoteFilter, TransactionFilter};
-use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
+use miden_client::store::{NoteFilter, Store, TransactionFilter};
+use miden_client::sync::{AccountSyncHint, StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
     LocalTransactionProver,
     TransactionId,
@@ -74,6 +74,7 @@ impl FaucetId {
 pub struct Faucet {
     id: FaucetId,
     client: Client<FilesystemKeyStore>,
+    store: Arc<dyn Store>,
     state_sync_component: StateSync,
     tx_prover: Arc<dyn TransactionProver>,
     issuance: watch::Sender<AssetAmount>,
@@ -125,13 +126,10 @@ impl Faucet {
         let note_screener = NoteScreener::new(sqlite_store.clone());
         let grpc_client =
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
-        let state_sync_component = StateSync::new(
-            grpc_client.clone(),
-            Some(sqlite_store.clone()),
-            Arc::new(note_screener),
-            None,
-        );
-        Self::sync_state(account.id(), &mut client, &state_sync_component).await?;
+        let state_sync_component =
+            StateSync::new(grpc_client.clone(), Arc::new(note_screener), None);
+        Self::sync_state(account.id(), &mut client, sqlite_store.as_ref(), &state_sync_component)
+            .await?;
 
         let add_result = client.add_account(&account, false).await;
         match add_result {
@@ -181,13 +179,13 @@ impl Faucet {
 
         let account = client.get_account(account_id).await?.context("no account found")?;
 
-        let faucet = BasicFungibleFaucet::try_from(account.clone())?;
+        let token_metadata = FungibleTokenMetadata::try_from(account.storage())?;
         let tx_prover: Arc<dyn TransactionProver> = match config.remote_tx_prover_url.clone() {
             Some(url) => Arc::new(RemoteTransactionProver::new(url)),
             None => Arc::new(LocalTransactionProver::default()),
         };
         let id = FaucetId::new(account.id(), config.network_id.clone());
-        let max_supply = AssetAmount::new(faucet.max_supply().as_canonical_u64())?;
+        let max_supply = AssetAmount::new(token_metadata.max_supply().as_canonical_u64())?;
         let issuance_value = Self::read_issuance_from_store(&client, account.id()).await?;
         let (issuance, _) = watch::channel(issuance_value);
 
@@ -196,12 +194,12 @@ impl Faucet {
         let note_screener = NoteScreener::new(sqlite_store.clone());
         let grpc_client =
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
-        let state_sync_component =
-            StateSync::new(grpc_client, Some(sqlite_store.clone()), Arc::new(note_screener), None);
+        let state_sync_component = StateSync::new(grpc_client, Arc::new(note_screener), None);
 
         Ok(Self {
             id,
             client,
+            store: sqlite_store,
             state_sync_component,
             tx_prover,
             issuance,
@@ -215,16 +213,21 @@ impl Faucet {
     async fn sync_state(
         account_id: AccountId,
         client: &mut Client<FilesystemKeyStore>,
+        store: &dyn Store,
         state_sync: &StateSync,
     ) -> anyhow::Result<SyncSummary> {
-        // Get current state of the client
-        let accounts = client
-            .account_reader(account_id)
-            .header()
-            .await
-            .ok()
-            .map(|(header, _)| vec![header])
-            .unwrap_or_default();
+        // Provide the local storage layout so `StateSync` can fetch all map slots in a single
+        // `get_account_proof` call instead of issuing an extra RPC to discover the layout.
+        let accounts = match (
+            client.account_reader(account_id).header().await.ok(),
+            store.get_account_storage_header(account_id).await.ok(),
+        ) {
+            (Some((header, _)), Some(storage_header)) => vec![AccountSyncHint {
+                header,
+                storage_header,
+            }],
+            _ => Vec::new(),
+        };
         let output_notes = client.get_output_notes(NoteFilter::Expected).await?;
         let uncommitted_transactions =
             client.get_transactions(TransactionFilter::Uncommitted).await?;
@@ -558,10 +561,12 @@ impl Faucet {
         client: &Client<FilesystemKeyStore>,
         account_id: AccountId,
     ) -> anyhow::Result<AssetAmount> {
+        // TODO: we should be able to only load the storage slot with the token metadata. Anyway the
+        // faucet storage is light since stores only that.
         let account =
             client.get_account(account_id).await?.context("account not found in store")?;
-        let faucet = BasicFungibleFaucet::try_from(account)?;
-        Ok(AssetAmount::new(faucet.token_supply().as_canonical_u64())?)
+        let token_metadata = FungibleTokenMetadata::try_from(account.storage())?;
+        Ok(AssetAmount::new(token_metadata.token_supply().as_canonical_u64())?)
     }
 }
 
@@ -655,7 +660,14 @@ fn build_p2id_notes(
 mod tests {
     use std::env::temp_dir;
 
-    use miden_client::account::component::AuthControlled;
+    use miden_client::account::component::{
+        BasicFungibleFaucet,
+        BurnPolicyConfig,
+        MintPolicyConfig,
+        PolicyAuthority,
+        TokenName,
+        TokenPolicyManager,
+    };
     use miden_client::account::{AccountBuilder, AccountStorageMode, AccountType};
     use miden_client::asset::TokenSymbol;
     use miden_client::auth::{AuthSchemeId, AuthSecretKey, AuthSingleSig};
@@ -714,12 +726,20 @@ mod tests {
     async fn build_faucet(store: Arc<dyn Store>) -> Faucet {
         let secret = SecretKey::new();
         let symbol = TokenSymbol::new("TEST").unwrap();
-        let max_supply = Felt::try_from(1_000_000_000_000_u64).unwrap();
+        let name = TokenName::new(&symbol.to_string()).unwrap();
+        let token_metadata = FungibleTokenMetadata::builder(name, symbol, 6, 1_000_000_000_000_u64)
+            .build()
+            .unwrap();
         let account = AccountBuilder::new(rand::random())
             .account_type(AccountType::FungibleFaucet)
             .storage_mode(AccountStorageMode::Public)
-            .with_component(BasicFungibleFaucet::new(symbol, 6, max_supply).unwrap())
-            .with_component(AuthControlled::allow_all())
+            .with_component(token_metadata)
+            .with_component(BasicFungibleFaucet)
+            .with_components(TokenPolicyManager::new(
+                PolicyAuthority::AuthControlled,
+                MintPolicyConfig::AllowAll,
+                BurnPolicyConfig::AllowAll,
+            ))
             .with_auth_component(AuthSingleSig::new(
                 secret.public_key().to_commitment().into(),
                 AuthSchemeId::Falcon512Poseidon2,
@@ -750,7 +770,6 @@ mod tests {
             client,
             state_sync_component: StateSync::new(
                 mock_rpc,
-                Some(store.clone()),
                 Arc::new(NoteScreener::new(store.clone())),
                 None,
             ),
