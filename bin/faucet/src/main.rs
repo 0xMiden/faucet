@@ -917,7 +917,7 @@ mod tests {
     async fn run_faucet_server(stub_node_url: Url) -> String {
         let config = ClientConfig {
             node_url: Some(stub_node_url.clone()),
-            timeout: Duration::from_millis(5000),
+            timeout: Duration::from_secs(5),
             network: FaucetNetwork::Localhost,
             store_path: temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())),
             remote_tx_prover_url: None,

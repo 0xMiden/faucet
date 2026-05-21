@@ -222,10 +222,9 @@ impl Faucet {
             client.account_reader(account_id).header().await.ok(),
             store.get_account_storage_header(account_id).await.ok(),
         ) {
-            (Some((header, _)), Some(storage_header)) => vec![AccountSyncHint {
-                header,
-                storage_header,
-            }],
+            (Some((header, _)), Some(storage_header)) => {
+                vec![AccountSyncHint { header, storage_header }]
+            },
             _ => Vec::new(),
         };
         let output_notes = client.get_output_notes(NoteFilter::Expected).await?;
@@ -307,7 +306,13 @@ impl Faucet {
         // We sync before creating the transaction to ensure the state is up to date. If the
         // previous transaction somehow failed to be included in the block, our state would
         // be out of sync.
-        Self::sync_state(self.id.account_id, &mut self.client, &self.state_sync_component).await?;
+        Self::sync_state(
+            self.id.account_id,
+            &mut self.client,
+            self.store.as_ref(),
+            &self.state_sync_component,
+        )
+        .await?;
 
         let span = tracing::Span::current();
 
@@ -768,9 +773,10 @@ mod tests {
         Faucet {
             id: FaucetId::new(account.id(), NetworkId::Testnet),
             client,
+            store: store.clone(),
             state_sync_component: StateSync::new(
                 mock_rpc,
-                Arc::new(NoteScreener::new(store.clone())),
+                Arc::new(NoteScreener::new(store)),
                 None,
             ),
             tx_prover: Arc::new(LocalTransactionProver::default()),
