@@ -6,7 +6,19 @@ help:
 
 # -- variables ------------------------------------------------------------------------------------
 
+# The build target defaults to rust's host.
+BUILD_TARGET ?= $(shell rustc -vV | grep host | awk '{print $$2}')
 WARNINGS=RUSTDOCFLAGS="-D warnings"
+
+# -- building -------------------------------------------------------------------------------------
+
+.PHONY: build
+build: ## By default we should build in release mode
+	cargo build --release
+
+.PHONY: build-faucet-client
+build-faucet-client: ## Build triple-specific miden-faucet-client binary
+	cargo build --package miden-faucet-client --target $(BUILD_TARGET) --release
 
 # -- linting --------------------------------------------------------------------------------------
 
@@ -18,10 +30,6 @@ clippy: ## Runs Clippy with configs
 .PHONY: fix
 fix: ## Runs Fix with configs
 	cargo fix --allow-staged --allow-dirty --all-targets --all-features --workspace
-
-.PHONY: build
-build: ## By default we should build in release mode
-	cargo build --release
 
 .PHONY: format
 format: ## Runs Format using nightly toolchain
