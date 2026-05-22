@@ -52,8 +52,8 @@ url                   = { workspace = true }
 
 [dev-dependencies]
 fantoccini       = { version = "0.22" }
-miden-node-proto = { version = "0.14" }
-miden-testing    = { version = "0.14" }
+miden-node-proto = { branch = "next", git = "https://github.com/0xMiden/node.git" }
+miden-testing    = { branch = "next", default-features = false, git = "https://github.com/0xMiden/protocol.git" }
 reqwest          = { features = ["json"], workspace = true }
 serde_json       = { workspace = true }
 tokio            = { features = ["macros", "process"], workspace = true }

@@ -12,13 +12,6 @@ pub struct StubRpcApi;
 
 #[tonic::async_trait]
 impl api_server::Api for StubRpcApi {
-    async fn check_nullifiers(
-        &self,
-        _request: Request<proto::rpc::NullifierList>,
-    ) -> Result<Response<proto::rpc::CheckNullifiersResponse>, Status> {
-        unimplemented!()
-    }
-
     async fn get_block_header_by_number(
         &self,
         _request: Request<proto::rpc::BlockHeaderByNumberRequest>,
@@ -72,7 +65,7 @@ impl api_server::Api for StubRpcApi {
 
     async fn get_block_by_number(
         &self,
-        _request: Request<proto::blockchain::BlockNumber>,
+        _request: Request<proto::blockchain::BlockRequest>,
     ) -> Result<Response<proto::blockchain::MaybeBlock>, Status> {
         unimplemented!()
     }
@@ -156,10 +149,10 @@ impl api_server::Api for StubRpcApi {
         }))
     }
 
-    async fn get_note_error(
+    async fn get_network_note_status(
         &self,
         _request: Request<proto::note::NoteId>,
-    ) -> Result<Response<proto::rpc::GetNoteErrorResponse>, Status> {
+    ) -> Result<Response<proto::rpc::GetNetworkNoteStatusResponse>, Status> {
         unimplemented!()
     }
 }

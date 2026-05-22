@@ -673,7 +673,12 @@ mod tests {
         TokenName,
         TokenPolicyManager,
     };
-    use miden_client::account::{AccountBuilder, AccountStorageMode, AccountType};
+    use miden_client::account::{
+        AccountBuilder,
+        AccountBuilderSchemaCommitmentExt,
+        AccountStorageMode,
+        AccountType,
+    };
     use miden_client::asset::TokenSymbol;
     use miden_client::auth::{AuthSchemeId, AuthSecretKey, AuthSingleSig};
     use miden_client::crypto::rpo_falcon512::SecretKey;
@@ -738,6 +743,10 @@ mod tests {
         let account = AccountBuilder::new(rand::random())
             .account_type(AccountType::FungibleFaucet)
             .storage_mode(AccountStorageMode::Public)
+            .with_auth_component(AuthSingleSig::new(
+                secret.public_key().to_commitment().into(),
+                AuthSchemeId::Falcon512Poseidon2,
+            ))
             .with_component(token_metadata)
             .with_component(BasicFungibleFaucet)
             .with_components(TokenPolicyManager::new(
@@ -745,11 +754,7 @@ mod tests {
                 MintPolicyConfig::AllowAll,
                 BurnPolicyConfig::AllowAll,
             ))
-            .with_auth_component(AuthSingleSig::new(
-                secret.public_key().to_commitment().into(),
-                AuthSchemeId::Falcon512Poseidon2,
-            ))
-            .build()
+            .build_with_schema_commitment()
             .unwrap();
         let key = AuthSecretKey::Falcon512Poseidon2(secret);
 

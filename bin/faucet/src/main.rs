@@ -25,6 +25,7 @@ use miden_client::account::component::{
 use miden_client::account::{
     Account,
     AccountBuilder,
+    AccountBuilderSchemaCommitmentExt,
     AccountFile,
     AccountStorageMode,
     AccountType,
@@ -596,6 +597,7 @@ fn create_faucet_account(
     let account = AccountBuilder::new(rng.random())
         .account_type(AccountType::FungibleFaucet)
         .storage_mode(AccountStorageMode::Public)
+        .with_auth_component(auth_component)
         .with_component(token_metadata)
         .with_component(BasicFungibleFaucet)
         .with_components(TokenPolicyManager::new(
@@ -603,8 +605,7 @@ fn create_faucet_account(
             MintPolicyConfig::AllowAll,
             BurnPolicyConfig::AllowAll,
         ))
-        .with_auth_component(auth_component)
-        .build()
+        .build_with_schema_commitment()
         .context("failed to create basic fungible faucet account")?;
 
     Ok((account, AuthSecretKey::Falcon512Poseidon2(secret)))
