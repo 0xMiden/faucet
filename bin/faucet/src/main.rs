@@ -640,6 +640,7 @@ mod tests {
     use clap::Parser;
     use fantoccini::ClientBuilder;
     use miden_client::account::{AccountFile, AccountId, Address, NetworkId};
+    use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
     use miden_client_sqlite_store::SqliteStore;
     use rand::SeedableRng;
     use serde_json::{Map, json};
@@ -853,7 +854,8 @@ mod tests {
         assert_eq!(title, "Miden Faucet");
 
         let network_id = NetworkId::Testnet;
-        let account_id = AccountId::try_from(0).unwrap();
+        let account_id =
+            AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE).unwrap();
         let address = Address::new(account_id);
         let address_bech32 = address.encode(network_id);
 

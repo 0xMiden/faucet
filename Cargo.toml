@@ -28,7 +28,7 @@ miden-client-cli          = { git = "https://github.com/0xMiden/miden-client", r
 miden-client-sqlite-store = { git = "https://github.com/0xMiden/miden-client", rev = "991ad0ef23708770139a9588c79c783a082ddacc" }
 # `AuthMethod` (required by `create_fungible_faucet`) is not re-exported by miden-client, so we
 # depend on miden-standards directly. Must match the version miden-client resolves (0.15.0).
-miden-standards           = { version = "0.15" }
+miden-standards = { version = "0.15" }
 
 # External dependencies
 anyhow                = { version = "1.0" }

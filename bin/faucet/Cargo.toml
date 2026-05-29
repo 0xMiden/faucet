@@ -52,7 +52,8 @@ tracing-subscriber    = { workspace = true }
 url                   = { workspace = true }
 
 [dev-dependencies]
-fantoccini       = { version = "0.22" }
+fantoccini   = { version = "0.22" }
+miden-client = { features = ["testing"], workspace = true }
 # Pinned to the same node commit miden-client resolves so the gRPC stub's proto types match the
 # client's (the `igamigo-export-ntxauth` branch tip).
 miden-node-proto = { git = "https://github.com/0xMiden/node.git", rev = "4bdb7853a0e91fb45ccf25352dd0cd3552732524" }
