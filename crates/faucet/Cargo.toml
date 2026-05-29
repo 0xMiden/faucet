@@ -32,5 +32,6 @@ url       = { workspace = true }
 miden-client = { workspace = true }
 
 [dev-dependencies]
-miden-client = { features = ["testing", "tonic"], workspace = true }
-uuid         = { workspace = true }
+miden-client    = { features = ["testing", "tonic"], workspace = true }
+miden-standards = { workspace = true }
+uuid            = { workspace = true }

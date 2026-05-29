@@ -29,6 +29,7 @@ tokio                  = { features = ["macros", "net", "rt-multi-thread", "sync
 url                    = { workspace = true }
 
 [dev-dependencies]
-axum  = { features = ["tokio"], version = "0.8" }
-serde = { workspace = true }
-tokio = { features = ["macros", "net", "rt-multi-thread", "time"], workspace = true }
+axum         = { features = ["tokio"], version = "0.8" }
+miden-client = { features = ["testing"], workspace = true }
+serde        = { workspace = true }
+tokio        = { features = ["macros", "net", "rt-multi-thread", "time"], workspace = true }

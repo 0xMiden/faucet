@@ -4,14 +4,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
-use miden_client::account::component::FungibleTokenMetadata;
+use miden_client::account::component::FungibleFaucet;
 use miden_client::account::{Account, AccountId, Address, NetworkId};
-use miden_client::asset::FungibleAsset;
+use miden_client::asset::{AssetCallbackFlag, FungibleAsset};
 use miden_client::auth::AuthSecretKey;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{RandomCoin, Rpo256};
 use miden_client::keystore::{FilesystemKeyStore, Keystore};
-use miden_client::note::{Note, NoteAttachment, NoteError, NoteId, P2idNote};
+use miden_client::note::{Note, NoteAttachments, NoteError, NoteId, P2idNote};
 use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, RpcError};
 use miden_client::store::{NoteFilter, Store, TransactionFilter};
 use miden_client::sync::{AccountSyncHint, StateSync, StateSyncInput, SyncSummary};
@@ -179,13 +179,13 @@ impl Faucet {
 
         let account = client.get_account(account_id).await?.context("no account found")?;
 
-        let token_metadata = FungibleTokenMetadata::try_from(account.storage())?;
+        let token_metadata = FungibleFaucet::try_from(account.storage())?;
         let tx_prover: Arc<dyn TransactionProver> = match config.remote_tx_prover_url.clone() {
             Some(url) => Arc::new(RemoteTransactionProver::new(url)),
             None => Arc::new(LocalTransactionProver::default()),
         };
         let id = FaucetId::new(account.id(), config.network_id.clone());
-        let max_supply = AssetAmount::new(token_metadata.max_supply().as_canonical_u64())?;
+        let max_supply = AssetAmount::new(token_metadata.max_supply().as_u64())?;
         let issuance_value = Self::read_issuance_from_store(&client, account.id()).await?;
         let (issuance, _) = watch::channel(issuance_value);
 
@@ -326,7 +326,12 @@ impl Faucet {
         // Build notes
         let mut rng = {
             let auth_seed: [u64; 4] = rng().random();
-            let rng_seed = Word::from(auth_seed.map(Felt::new));
+            // Mask to 63 bits so each value is always a valid field element (< Goldilocks
+            // modulus), since `Felt::new` is now fallible for out-of-range inputs.
+            let rng_seed = Word::new(
+                auth_seed
+                    .map(|v| Felt::new(v >> 1).expect("63-bit value is a valid field element")),
+            );
             RandomCoin::new(rng_seed)
         };
         let notes = build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?;
@@ -408,15 +413,26 @@ impl Faucet {
         let expected_output_recipients: Vec<_> =
             notes.iter().map(Note::recipient).cloned().collect();
         let n = notes.len() as u64;
-        let mut note_data = vec![Felt::new(n)];
+        let mut note_data = vec![Felt::new_unchecked(n)];
         for note in notes {
             // SAFETY: these are p2id notes with only one fungible asset
-            let amount = note.assets().iter().next().unwrap().unwrap_fungible().amount();
+            let asset = note.assets().iter().next().unwrap().unwrap_fungible();
+            let amount = asset.amount().as_u64();
+            // The fungible asset's vault key is constant per faucet, but `mint_and_send` now
+            // expects it on the operand stack, so we pass it alongside every recipient. The
+            // ordering here must match the `adv_push` sequence in `mint.masm`.
+            //
+            // The faucet registers transfer policies, which enable asset callbacks. The kernel
+            // bakes the callbacks flag into the asset key it derives for the active faucet, so the
+            // ASSET_KEY we supply must carry the same `Enabled` flag or the asset-binding check in
+            // `mint_and_send` fails.
+            let asset_key = asset.with_callbacks(AssetCallbackFlag::Enabled).to_key_word();
 
             note_data.extend(note.recipient().digest().iter().rev());
             note_data.push(Felt::from(note.metadata().note_type()));
             note_data.push(Felt::from(note.metadata().tag()));
-            note_data.push(Felt::new(amount));
+            note_data.push(Felt::new_unchecked(amount));
+            note_data.extend(asset_key.iter().rev());
         }
         let note_data_commitment = Rpo256::hash_elements(&note_data);
         let advice_map = [(note_data_commitment, note_data)];
@@ -570,8 +586,8 @@ impl Faucet {
         // faucet storage is light since stores only that.
         let account =
             client.get_account(account_id).await?.context("account not found in store")?;
-        let token_metadata = FungibleTokenMetadata::try_from(account.storage())?;
-        Ok(AssetAmount::new(token_metadata.token_supply().as_canonical_u64())?)
+        let token_metadata = FungibleFaucet::try_from(account.storage())?;
+        Ok(AssetAmount::new(token_metadata.token_supply().as_u64())?)
     }
 }
 
@@ -643,14 +659,19 @@ fn build_p2id_notes(
     let mut notes = Vec::new();
     for request in requests {
         // SAFETY: source is definitely a faucet account, and the amount is valid.
-        let asset =
-            FungibleAsset::new(source.account_id, request.asset_amount.base_units()).unwrap();
+        //
+        // The faucet enables asset callbacks (it registers transfer policies), so the asset it
+        // mints carries the `Enabled` callbacks flag. We build the note with the same flag so its
+        // `NoteId` matches the note actually created on-chain by `mint_and_send`.
+        let asset = FungibleAsset::new(source.account_id, request.asset_amount.base_units())
+            .unwrap()
+            .with_callbacks(AssetCallbackFlag::Enabled);
         let note = P2idNote::create(
             source.account_id,
             request.account_id,
             vec![asset.into()],
             request.note_type.into(),
-            NoteAttachment::default(),
+            NoteAttachments::default(),
             rng,
         )
         .inspect_err(
@@ -665,26 +686,27 @@ fn build_p2id_notes(
 mod tests {
     use std::env::temp_dir;
 
+    use miden_client::account::AccountType;
     use miden_client::account::component::{
-        BasicFungibleFaucet,
+        AccessControl,
+        AuthScheme,
         BurnPolicyConfig,
+        FungibleFaucet,
         MintPolicyConfig,
-        PolicyAuthority,
+        PolicyRegistration,
         TokenName,
         TokenPolicyManager,
-    };
-    use miden_client::account::{
-        AccountBuilder,
-        AccountBuilderSchemaCommitmentExt,
-        AccountStorageMode,
-        AccountType,
+        TransferPolicy,
+        create_fungible_faucet,
     };
     use miden_client::asset::TokenSymbol;
-    use miden_client::auth::{AuthSchemeId, AuthSecretKey, AuthSingleSig};
+    use miden_client::auth::AuthSecretKey;
     use miden_client::crypto::rpo_falcon512::SecretKey;
     use miden_client::store::{NoteFilter, Store};
     use miden_client::testing::MockChain;
+    use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
     use miden_client::testing::mock::MockRpcApi;
+    use miden_standards::AuthMethod;
     use tokio::sync::{mpsc, oneshot};
     use uuid::Uuid;
 
@@ -700,7 +722,8 @@ mod tests {
         for i in 0..batch_size {
             let (sender, receiver) = oneshot::channel();
             let mint_request = MintRequest {
-                account_id: AccountId::try_from(1).unwrap(),
+                account_id: AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE)
+                    .unwrap(),
                 note_type: if i % 2 == 0 {
                     NoteType::Public
                 } else {
@@ -735,27 +758,40 @@ mod tests {
     /// Builds a faucet using a mock client.
     async fn build_faucet(store: Arc<dyn Store>) -> Faucet {
         let secret = SecretKey::new();
-        let symbol = TokenSymbol::new("TEST").unwrap();
+        let symbol = TokenSymbol::try_from("TEST").unwrap();
         let name = TokenName::new(&symbol.to_string()).unwrap();
-        let token_metadata = FungibleTokenMetadata::builder(name, symbol, 6, 1_000_000_000_000_u64)
+
+        let faucet = FungibleFaucet::builder()
+            .name(name)
+            .symbol(symbol)
+            .decimals(6)
+            .max_supply(miden_client::asset::AssetAmount::new(1_000_000_000_000).unwrap())
             .build()
             .unwrap();
-        let account = AccountBuilder::new(rand::random())
-            .account_type(AccountType::FungibleFaucet)
-            .storage_mode(AccountStorageMode::Public)
-            .with_auth_component(AuthSingleSig::new(
-                secret.public_key().to_commitment().into(),
-                AuthSchemeId::Falcon512Poseidon2,
-            ))
-            .with_component(token_metadata)
-            .with_component(BasicFungibleFaucet)
-            .with_components(TokenPolicyManager::new(
-                PolicyAuthority::AuthControlled,
-                MintPolicyConfig::AllowAll,
-                BurnPolicyConfig::AllowAll,
-            ))
-            .build_with_schema_commitment()
+
+        let auth_method = AuthMethod::SingleSig {
+            approver: (secret.public_key().to_commitment().into(), AuthScheme::Falcon512Poseidon2),
+        };
+
+        let token_policy_manager = TokenPolicyManager::new()
+            .with_mint_policy(MintPolicyConfig::AllowAll, PolicyRegistration::Active)
+            .unwrap()
+            .with_burn_policy(BurnPolicyConfig::AllowAll, PolicyRegistration::Active)
+            .unwrap()
+            .with_send_policy(TransferPolicy::AllowAll, PolicyRegistration::Active)
+            .unwrap()
+            .with_receive_policy(TransferPolicy::AllowAll, PolicyRegistration::Active)
             .unwrap();
+
+        let account = create_fungible_faucet(
+            rand::random(),
+            faucet,
+            AccountType::Public,
+            auth_method,
+            AccessControl::AuthControlled,
+            token_policy_manager,
+        )
+        .unwrap();
         let key = AuthSecretKey::Falcon512Poseidon2(secret);
 
         let keystore_path = temp_dir().join(format!("keystore-{}", Uuid::new_v4()));
