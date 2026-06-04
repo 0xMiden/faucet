@@ -2451,7 +2451,7 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.15.0"
-source = "git+https://github.com/0xMiden/miden-client?rev=991ad0ef23708770139a9588c79c783a082ddacc#991ad0ef23708770139a9588c79c783a082ddacc"
+source = "git+https://github.com/0xMiden/miden-client?rev=4adc065b3cd3c83a12e99f7cd8c9776a160a5db4#4adc065b3cd3c83a12e99f7cd8c9776a160a5db4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2460,7 +2460,7 @@ dependencies = [
  "getrandom 0.3.4",
  "gloo-timers",
  "hex",
- "miden-node-proto-build 0.15.0 (git+https://github.com/0xMiden/node.git?branch=igamigo-export-ntxauth)",
+ "miden-node-proto-build 0.15.0-rc.0",
  "miden-note-transport-proto-build",
  "miden-protocol",
  "miden-remote-prover-client",
@@ -2489,7 +2489,7 @@ dependencies = [
 [[package]]
 name = "miden-client-cli"
 version = "0.15.0"
-source = "git+https://github.com/0xMiden/miden-client?rev=991ad0ef23708770139a9588c79c783a082ddacc#991ad0ef23708770139a9588c79c783a082ddacc"
+source = "git+https://github.com/0xMiden/miden-client?rev=4adc065b3cd3c83a12e99f7cd8c9776a160a5db4#4adc065b3cd3c83a12e99f7cd8c9776a160a5db4"
 dependencies = [
  "clap",
  "comfy-table",
@@ -2510,7 +2510,7 @@ dependencies = [
 [[package]]
 name = "miden-client-sqlite-store"
 version = "0.15.0"
-source = "git+https://github.com/0xMiden/miden-client?rev=991ad0ef23708770139a9588c79c783a082ddacc#991ad0ef23708770139a9588c79c783a082ddacc"
+source = "git+https://github.com/0xMiden/miden-client?rev=4adc065b3cd3c83a12e99f7cd8c9776a160a5db4#4adc065b3cd3c83a12e99f7cd8c9776a160a5db4"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2852,7 +2852,7 @@ dependencies = [
  "hex",
  "http 1.4.1",
  "miden-node-grpc-error-macro",
- "miden-node-proto-build 0.15.0 (git+https://github.com/0xMiden/node.git?rev=4bdb7853a0e91fb45ccf25352dd0cd3552732524)",
+ "miden-node-proto-build 0.15.0",
  "miden-node-utils",
  "miden-protocol",
  "miden-standards",
@@ -2868,8 +2868,8 @@ dependencies = [
 
 [[package]]
 name = "miden-node-proto-build"
-version = "0.15.0"
-source = "git+https://github.com/0xMiden/node.git?branch=igamigo-export-ntxauth#4bdb7853a0e91fb45ccf25352dd0cd3552732524"
+version = "0.15.0-rc.0"
+source = "git+https://github.com/0xMiden/node.git?branch=igamigo-reexport-ntxauth#1b8bd2910c873ed02bf9ebb86c6f1d6a3bad4bf2"
 dependencies = [
  "build-rs",
  "codegen",
@@ -3044,13 +3044,13 @@ dependencies = [
 
 [[package]]
 name = "miden-remote-prover-client"
-version = "0.15.0"
-source = "git+https://github.com/0xMiden/node.git?branch=igamigo-export-ntxauth#4bdb7853a0e91fb45ccf25352dd0cd3552732524"
+version = "0.15.0-rc.0"
+source = "git+https://github.com/0xMiden/node.git?branch=igamigo-reexport-ntxauth#1b8bd2910c873ed02bf9ebb86c6f1d6a3bad4bf2"
 dependencies = [
  "build-rs",
  "fs-err",
  "getrandom 0.4.2",
- "miden-node-proto-build 0.15.0 (git+https://github.com/0xMiden/node.git?branch=igamigo-export-ntxauth)",
+ "miden-node-proto-build 0.15.0-rc.0",
  "miden-protocol",
  "miden-tx",
  "miette",
