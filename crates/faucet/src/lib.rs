@@ -326,12 +326,7 @@ impl Faucet {
         // Build notes
         let mut rng = {
             let auth_seed: [u64; 4] = rng().random();
-            // Mask to 63 bits so each value is always a valid field element (< Goldilocks
-            // modulus), since `Felt::new` is now fallible for out-of-range inputs.
-            let rng_seed = Word::new(
-                auth_seed
-                    .map(|v| Felt::new(v >> 1).expect("63-bit value is a valid field element")),
-            );
+            let rng_seed = Word::new(auth_seed.map(Felt::new_unchecked));
             RandomCoin::new(rng_seed)
         };
         let notes = build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?;
@@ -418,14 +413,7 @@ impl Faucet {
             // SAFETY: these are p2id notes with only one fungible asset
             let asset = note.assets().iter().next().unwrap().unwrap_fungible();
             let amount = asset.amount().as_u64();
-            // The fungible asset's vault key is constant per faucet, but `mint_and_send` now
-            // expects it on the operand stack, so we pass it alongside every recipient. The
-            // ordering here must match the `adv_push` sequence in `mint.masm`.
-            //
-            // The faucet registers transfer policies, which enable asset callbacks. The kernel
-            // bakes the callbacks flag into the asset key it derives for the active faucet, so the
-            // ASSET_KEY we supply must carry the same `Enabled` flag or the asset-binding check in
-            // `mint_and_send` fails.
+            // The faucet registers transfer policies, which enable asset callbacks.
             let asset_key = asset.with_callbacks(AssetCallbackFlag::Enabled).to_key_word();
 
             note_data.extend(note.recipient().digest().iter().rev());
@@ -582,12 +570,13 @@ impl Faucet {
         client: &Client<FilesystemKeyStore>,
         account_id: AccountId,
     ) -> anyhow::Result<AssetAmount> {
-        // TODO: we should be able to only load the storage slot with the token metadata. Anyway the
-        // faucet storage is light since stores only that.
-        let account =
-            client.get_account(account_id).await?.context("account not found in store")?;
-        let token_metadata = FungibleFaucet::try_from(account.storage())?;
-        Ok(AssetAmount::new(token_metadata.token_supply().as_u64())?)
+        let token_config_word = client
+            .account_reader(account_id)
+            .get_storage_item(FungibleFaucet::token_config_slot().clone())
+            .await?;
+        // The token config layout is `[token_supply, max_supply, decimals, token_symbol]`
+        let token_supply = token_config_word[0].as_canonical_u64();
+        Ok(AssetAmount::new(token_supply)?)
     }
 }
 
@@ -658,11 +647,9 @@ fn build_p2id_notes(
     // ids are validated on the request level.
     let mut notes = Vec::new();
     for request in requests {
-        // SAFETY: source is definitely a faucet account, and the amount is valid.
-        //
         // The faucet enables asset callbacks (it registers transfer policies), so the asset it
-        // mints carries the `Enabled` callbacks flag. We build the note with the same flag so its
-        // `NoteId` matches the note actually created on-chain by `mint_and_send`.
+        // mints carries the `Enabled` callbacks flag
+        // SAFETY: source is definitely a faucet account, and the amount is valid.
         let asset = FungibleAsset::new(source.account_id, request.asset_amount.base_units())
             .unwrap()
             .with_callbacks(AssetCallbackFlag::Enabled);

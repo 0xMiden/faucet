@@ -107,7 +107,7 @@ pub enum Command {
             short,
             long,
             value_name = "STRING",
-            required_unless_present = "import_account_path", 
+            required_unless_present = "import_account_path",
             env = ENV_TOKEN_SYMBOL
         )]
         token_symbol: Option<String>,
@@ -577,11 +577,7 @@ fn create_faucet_account(
     let mut rng = ChaCha20Rng::from_seed(rand::random());
     let secret = {
         let auth_seed: [u64; 4] = rng.random();
-        // Mask to 63 bits so each value is always a valid field element (< Goldilocks modulus),
-        // since `Felt::new` is now fallible for out-of-range inputs.
-        let rng_seed = Word::new(
-            auth_seed.map(|v| Felt::new(v >> 1).expect("63-bit value is a valid field element")),
-        );
+        let rng_seed = Word::from(auth_seed.map(Felt::new_unchecked));
         SecretKey::with_rng(&mut RandomCoin::new(rng_seed))
     };
 
@@ -603,7 +599,7 @@ fn create_faucet_account(
         approver: (secret.public_key().to_commitment().into(), AuthScheme::Falcon512Poseidon2),
     };
 
-    // Permissionless mint/burn/transfer policies, matching the previous AllowAll configuration.
+    // Permissionless mint/burn/send/receive policies.
     let token_policy_manager = TokenPolicyManager::new()
         .with_mint_policy(MintPolicyConfig::AllowAll, PolicyRegistration::Active)
         .context("failed to set mint policy")?
