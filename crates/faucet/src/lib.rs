@@ -212,7 +212,13 @@ impl Faucet {
         client: &mut Client<FilesystemKeyStore>,
         state_sync: &StateSync,
     ) -> anyhow::Result<SyncSummary> {
-        let (account_header, _) = client.account_reader(account_id).header().await?;
+        let accounts = client
+            .account_reader(account_id)
+            .header()
+            .await
+            .ok()
+            .map(|(header, _)| vec![header])
+            .unwrap_or_default();
         let output_notes = client.get_output_notes(NoteFilter::Expected).await?;
         let uncommitted_transactions =
             client.get_transactions(TransactionFilter::Uncommitted).await?;
@@ -225,7 +231,7 @@ impl Faucet {
             .sync_state(
                 &mut current_partial_mmr,
                 StateSyncInput {
-                    accounts: vec![account_header],
+                    accounts,
                     note_tags: BTreeSet::new(),
                     input_notes: vec![],
                     output_notes,
