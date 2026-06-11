@@ -54,7 +54,7 @@ url                   = { workspace = true }
 fantoccini       = { version = "0.22" }
 miden-node-proto = { version = "0.14" }
 miden-testing    = { version = "0.14" }
-reqwest          = { features = ["json"], workspace = true }
+reqwest          = { features = ["json", "rustls", "http2"], workspace = true }
 serde_json       = { workspace = true }
 tokio            = { features = ["macros", "process"], workspace = true }
 tonic-web        = { version = "0.14" }

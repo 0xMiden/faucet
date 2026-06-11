@@ -35,6 +35,7 @@ use miden_faucet_lib::{Faucet, FaucetConfig};
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
+use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use url::Url;
@@ -101,7 +102,7 @@ pub enum Command {
             short,
             long,
             value_name = "STRING",
-            required_unless_present = "import_account_path", 
+            required_unless_present = "import_account_path",
             env = ENV_TOKEN_SYMBOL
         )]
         token_symbol: Option<String>,
@@ -157,8 +158,10 @@ pub enum Command {
 
         /// The secret to be used by the server to sign the `PoW` challenges. This should NOT be
         /// shared.
-        #[arg(long = "pow-secret", value_name = "STRING", default_value = "", env = ENV_POW_SECRET)]
-        pow_secret: String,
+        ///
+        /// If not provided, a random secret is generated at startup.
+        #[arg(long = "pow-secret", value_name = "STRING", env = ENV_POW_SECRET)]
+        pow_secret: Option<String>,
 
         /// The duration during which the `PoW` challenges are valid. Changing this will affect the
         /// rate limiting, since it works by rejecting new submissions while the previous submitted
@@ -456,6 +459,12 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 note_transport_url,
             };
 
+            // Use a random secret if not explicitly provided.
+            let pow_secret = match pow_secret {
+                Some(secret) => Sha256::digest(secret.as_bytes()).into(),
+                None => rand::random(),
+            };
+
             // We keep a channel sender open in the main thread to avoid the faucet closing before
             // servers can propagate any errors.
             let tx_mint_requests_clone = tx_mint_requests.clone();
@@ -463,7 +472,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 metadata,
                 max_claimable_amount,
                 tx_mint_requests_clone,
-                pow_secret.as_str(),
+                pow_secret,
                 rate_limiter_config,
                 &api_keys,
                 store,
@@ -944,7 +953,7 @@ mod tests {
                         frontend_bind_port: 8080,
                         no_frontend: false,
                         max_claimable_amount: 1_000_000_000,
-                        pow_secret: "test".to_string(),
+                        pow_secret: Some("test".to_string()),
                         pow_challenge_lifetime: Duration::from_secs(30),
                         pow_cleanup_interval: Duration::from_secs(1),
                         pow_growth_rate: 1.0,

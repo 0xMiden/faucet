@@ -14,7 +14,6 @@ use miden_client::utils::hex_to_bytes;
 use miden_faucet_lib::requests::MintRequestSender;
 use miden_faucet_lib::types::AssetAmount;
 use miden_pow_rate_limiter::{Challenge, ChallengeError, PoWRateLimiter, PoWRateLimiterConfig};
-use sha2::{Digest, Sha256};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tower::ServiceBuilder;
@@ -62,7 +61,7 @@ impl ApiServer {
         metadata: Metadata,
         max_claimable_amount: AssetAmount,
         mint_request_sender: MintRequestSender,
-        pow_secret: &str,
+        pow_secret: [u8; 32],
         rate_limiter_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],
         store: Arc<dyn Store>,
@@ -71,12 +70,7 @@ impl ApiServer {
     ) -> Self {
         let mint_state = GetTokensState::new(mint_request_sender, max_claimable_amount);
 
-        // Hash the string secret to [u8; 32] for PoW
-        let mut hasher = Sha256::new();
-        hasher.update(pow_secret.as_bytes());
-        let secret_bytes: [u8; 32] = hasher.finalize().into();
-
-        let rate_limiter = PoWRateLimiter::new_with_cleanup(secret_bytes, rate_limiter_config);
+        let rate_limiter = PoWRateLimiter::new_with_cleanup(pow_secret, rate_limiter_config);
 
         ApiServer {
             mint_state,
