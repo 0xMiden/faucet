@@ -13,8 +13,8 @@ use miden_client::crypto::{RandomCoin, Rpo256};
 use miden_client::keystore::{FilesystemKeyStore, Keystore};
 use miden_client::note::{Note, NoteAttachments, NoteError, NoteId, P2idNote};
 use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, RpcError};
-use miden_client::store::{NoteFilter, Store, TransactionFilter};
-use miden_client::sync::{AccountSyncHint, StateSync, StateSyncInput, SyncSummary};
+use miden_client::store::{NoteFilter, TransactionFilter};
+use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
     LocalTransactionProver,
     TransactionId,
@@ -74,7 +74,6 @@ impl FaucetId {
 pub struct Faucet {
     id: FaucetId,
     client: Client<FilesystemKeyStore>,
-    store: Arc<dyn Store>,
     state_sync_component: StateSync,
     tx_prover: Arc<dyn TransactionProver>,
     issuance: watch::Sender<AssetAmount>,
@@ -123,13 +122,12 @@ impl Faucet {
 
         // We sync to the chain tip before importing the account to avoid matching too many notes
         // tags from the genesis block (in case this is a fresh store).
-        let note_screener = NoteScreener::new(sqlite_store.clone());
+        let note_screener = NoteScreener::new(sqlite_store);
         let grpc_client =
             Arc::new(GrpcClient::new(&config.node_endpoint, config.timeout.as_millis() as u64));
         let state_sync_component =
             StateSync::new(grpc_client.clone(), Arc::new(note_screener), None);
-        Self::sync_state(account.id(), &mut client, sqlite_store.as_ref(), &state_sync_component)
-            .await?;
+        Self::sync_state(account.id(), &mut client, &state_sync_component).await?;
 
         let add_result = client.add_account(&account, false).await;
         match add_result {
@@ -199,7 +197,6 @@ impl Faucet {
         Ok(Self {
             id,
             client,
-            store: sqlite_store,
             state_sync_component,
             tx_prover,
             issuance,
@@ -213,20 +210,9 @@ impl Faucet {
     async fn sync_state(
         account_id: AccountId,
         client: &mut Client<FilesystemKeyStore>,
-        store: &dyn Store,
         state_sync: &StateSync,
     ) -> anyhow::Result<SyncSummary> {
-        // Provide the local storage layout so `StateSync` can fetch all map slots in a single
-        // `get_account_proof` call instead of issuing an extra RPC to discover the layout.
-        let accounts = match (
-            client.account_reader(account_id).header().await.ok(),
-            store.get_account_storage_header(account_id).await.ok(),
-        ) {
-            (Some((header, _)), Some(storage_header)) => {
-                vec![AccountSyncHint { header, storage_header }]
-            },
-            _ => Vec::new(),
-        };
+        let (account_header, _) = client.account_reader(account_id).header().await?;
         let output_notes = client.get_output_notes(NoteFilter::Expected).await?;
         let uncommitted_transactions =
             client.get_transactions(TransactionFilter::Uncommitted).await?;
@@ -239,7 +225,7 @@ impl Faucet {
             .sync_state(
                 &mut current_partial_mmr,
                 StateSyncInput {
-                    accounts,
+                    accounts: vec![account_header],
                     note_tags: BTreeSet::new(),
                     input_notes: vec![],
                     output_notes,
@@ -306,13 +292,7 @@ impl Faucet {
         // We sync before creating the transaction to ensure the state is up to date. If the
         // previous transaction somehow failed to be included in the block, our state would
         // be out of sync.
-        Self::sync_state(
-            self.id.account_id,
-            &mut self.client,
-            self.store.as_ref(),
-            &self.state_sync_component,
-        )
-        .await?;
+        Self::sync_state(self.id.account_id, &mut self.client, &self.state_sync_component).await?;
 
         let span = tracing::Span::current();
 
@@ -687,13 +667,12 @@ mod tests {
         create_fungible_faucet,
     };
     use miden_client::asset::TokenSymbol;
-    use miden_client::auth::AuthSecretKey;
+    use miden_client::auth::{AuthMethod, AuthSecretKey};
     use miden_client::crypto::rpo_falcon512::SecretKey;
     use miden_client::store::{NoteFilter, Store};
     use miden_client::testing::MockChain;
     use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
     use miden_client::testing::mock::MockRpcApi;
-    use miden_standards::AuthMethod;
     use tokio::sync::{mpsc, oneshot};
     use uuid::Uuid;
 
@@ -801,7 +780,6 @@ mod tests {
         Faucet {
             id: FaucetId::new(account.id(), NetworkId::Testnet),
             client,
-            store: store.clone(),
             state_sync_component: StateSync::new(
                 mock_rpc,
                 Arc::new(NoteScreener::new(store)),

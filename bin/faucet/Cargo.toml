@@ -21,7 +21,6 @@ miden-pow-rate-limiter = { features = ["tokio"], workspace = true }
 # Miden dependencies.
 miden-client              = { features = ["tonic"], workspace = true }
 miden-client-sqlite-store = { workspace = true }
-miden-standards           = { workspace = true }
 
 # External dependencies.
 anyhow                = { workspace = true }

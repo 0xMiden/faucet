@@ -27,7 +27,7 @@ use miden_client::account::component::{
 };
 use miden_client::account::{Account, AccountFile, AccountType};
 use miden_client::asset::TokenSymbol;
-use miden_client::auth::AuthSecretKey;
+use miden_client::auth::{AuthMethod, AuthSecretKey};
 use miden_client::crypto::RandomCoin;
 use miden_client::crypto::rpo_falcon512::SecretKey;
 use miden_client::note_transport::grpc::GrpcNoteTransportClient;
@@ -38,7 +38,6 @@ use miden_client_sqlite_store::SqliteStore;
 use miden_faucet_lib::types::AssetAmount;
 use miden_faucet_lib::{Faucet, FaucetConfig};
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
-use miden_standards::AuthMethod;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use tokio::sync::mpsc;

@@ -26,9 +26,6 @@ miden-pow-rate-limiter = { path = "crates/pow", version = "0.15.0" }
 miden-client              = { git = "https://github.com/0xMiden/miden-client", branch="next" }
 miden-client-cli          = { git = "https://github.com/0xMiden/miden-client", branch="next" }
 miden-client-sqlite-store = { git = "https://github.com/0xMiden/miden-client", branch="next" }
-# `AuthMethod` (required by `create_fungible_faucet`) is not re-exported by miden-client, so we
-# depend on miden-standards directly. Must match the version miden-client resolves (0.15.0).
-miden-standards = { version = "0.15" }
 
 # External dependencies
 anyhow                = { version = "1.0" }
