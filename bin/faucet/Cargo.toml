@@ -56,7 +56,7 @@ fantoccini   = { version = "0.22" }
 miden-client = { workspace = true }
 # Pinned to the same node commit miden-client resolves so the gRPC stub's proto types match the
 # client's (the `igamigo-export-ntxauth` branch tip).
-miden-node-proto = { version = "0.15.0-rc.0" }
+miden-node-proto = { version = "0.15" }
 miden-testing    = { default-features = false, version = "0.15" }
 reqwest          = { features = ["json"], workspace = true }
 serde_json       = { workspace = true }
