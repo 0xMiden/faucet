@@ -17,7 +17,7 @@ impl std::fmt::Display for AssetAmount {
 
 impl AssetAmount {
     /// The absolute maximum asset amount allowed by the network.
-    pub const MAX: u64 = FungibleAsset::MAX_AMOUNT;
+    pub const MAX: u64 = FungibleAsset::MAX_AMOUNT.as_u64();
 
     /// Creates an [`AssetAmount`] from a base unit amount.
     ///

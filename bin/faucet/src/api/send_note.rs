@@ -42,7 +42,7 @@ pub async fn send_note(
         .ok_or(SendNoteError::NoteNotFound)?;
 
     let note = Note::try_from(note_record).unwrap();
-    let header = note.header().clone();
+    let header = *note.header();
     let details: NoteDetails = note.into();
 
     note_transport_client.send_note(header, details.to_bytes()).await?;
