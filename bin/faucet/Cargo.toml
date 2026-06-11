@@ -51,8 +51,8 @@ tracing-subscriber    = { workspace = true }
 url                   = { workspace = true }
 
 [dev-dependencies]
-fantoccini   = { version = "0.22" }
-miden-client = { workspace = true }
+fantoccini       = { version = "0.22" }
+miden-client     = { workspace = true }
 miden-node-proto = { version = "0.15" }
 miden-testing    = { default-features = false, version = "0.15" }
 reqwest          = { features = ["json"], workspace = true }
