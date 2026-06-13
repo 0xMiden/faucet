@@ -13,16 +13,21 @@ use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use miden_client::account::component::{AuthControlled, BasicFungibleFaucet};
-use miden_client::account::{
-    Account,
-    AccountBuilder,
-    AccountFile,
-    AccountStorageMode,
-    AccountType,
+use miden_client::account::component::{
+    AccessControl,
+    AuthScheme,
+    BurnPolicyConfig,
+    FungibleFaucet,
+    MintPolicyConfig,
+    PolicyRegistration,
+    TokenName,
+    TokenPolicyManager,
+    TransferPolicy,
+    create_fungible_faucet,
 };
+use miden_client::account::{Account, AccountFile, AccountType};
 use miden_client::asset::TokenSymbol;
-use miden_client::auth::{AuthSchemeId, AuthSecretKey, AuthSingleSig};
+use miden_client::auth::{AuthMethod, AuthSecretKey};
 use miden_client::crypto::RandomCoin;
 use miden_client::crypto::rpo_falcon512::SecretKey;
 use miden_client::note_transport::grpc::GrpcNoteTransportClient;
@@ -35,6 +40,7 @@ use miden_faucet_lib::{Faucet, FaucetConfig};
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
+use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use url::Url;
@@ -101,7 +107,7 @@ pub enum Command {
             short,
             long,
             value_name = "STRING",
-            required_unless_present = "import_account_path", 
+            required_unless_present = "import_account_path",
             env = ENV_TOKEN_SYMBOL
         )]
         token_symbol: Option<String>,
@@ -157,8 +163,10 @@ pub enum Command {
 
         /// The secret to be used by the server to sign the `PoW` challenges. This should NOT be
         /// shared.
-        #[arg(long = "pow-secret", value_name = "STRING", default_value = "", env = ENV_POW_SECRET)]
-        pow_secret: String,
+        ///
+        /// If not provided, a random secret is generated at startup.
+        #[arg(long = "pow-secret", value_name = "STRING", env = ENV_POW_SECRET)]
+        pow_secret: Option<String>,
 
         /// The duration during which the `PoW` challenges are valid. Changing this will affect the
         /// rate limiting, since it works by rejecting new submissions while the previous submitted
@@ -436,9 +444,16 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 baseline: pow_baseline,
             };
             let faucet_account = faucet.faucet_account().await?;
-            let faucet_component = BasicFungibleFaucet::try_from(&faucet_account)?;
-            let max_supply = AssetAmount::new(faucet_component.max_supply().as_canonical_u64())?;
-            let decimals = faucet_component.decimals();
+            let token_metadata = FungibleFaucet::try_from(faucet_account.storage())?;
+            let max_supply = AssetAmount::new(token_metadata.max_supply().as_u64())?;
+            let decimals = token_metadata.decimals();
+
+            let note_transport_client = note_transport_url.as_ref().map(|url| {
+                Arc::new(GrpcNoteTransportClient::new(
+                    url.to_string(),
+                    timeout.as_millis().try_into().expect("timeout should fit into u64"),
+                ))
+            });
 
             let metadata = Metadata {
                 id: faucet.faucet_id(),
@@ -446,14 +461,14 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 decimals,
                 explorer_url,
                 base_amount,
+                note_transport_url,
             };
 
-            let note_transport_client = note_transport_url.map(|url| {
-                Arc::new(GrpcNoteTransportClient::new(
-                    url.to_string(),
-                    timeout.as_millis().try_into().expect("timeout should fit into u64"),
-                ))
-            });
+            // Use a random secret if not explicitly provided.
+            let pow_secret = match pow_secret {
+                Some(secret) => Sha256::digest(secret.as_bytes()).into(),
+                None => rand::random(),
+            };
 
             // We keep a channel sender open in the main thread to avoid the faucet closing before
             // servers can propagate any errors.
@@ -462,7 +477,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 metadata,
                 max_claimable_amount,
                 tx_mint_requests_clone,
-                pow_secret.as_str(),
+                pow_secret,
                 rate_limiter_config,
                 &api_keys,
                 store,
@@ -570,27 +585,48 @@ fn create_faucet_account(
     let mut rng = ChaCha20Rng::from_seed(rand::random());
     let secret = {
         let auth_seed: [u64; 4] = rng.random();
-        let rng_seed = Word::from(auth_seed.map(Felt::new));
+        let rng_seed = Word::from(auth_seed.map(Felt::new_unchecked));
         SecretKey::with_rng(&mut RandomCoin::new(rng_seed))
     };
 
     let symbol = TokenSymbol::try_from(token_symbol).context("failed to parse token symbol")?;
-    let max_supply = Felt::try_from(max_supply)
-        .map_err(anyhow::Error::msg)
-        .context("max supply value is greater than or equal to the field modulus")?;
-    let auth_component = AuthSingleSig::new(
-        secret.public_key().to_commitment().into(),
-        AuthSchemeId::Falcon512Poseidon2,
-    );
+    let name = TokenName::new(&symbol.to_string()).context("failed to derive token name")?;
 
-    let account = AccountBuilder::new(rng.random())
-        .account_type(AccountType::FungibleFaucet)
-        .storage_mode(AccountStorageMode::Public)
-        .with_component(BasicFungibleFaucet::new(symbol, decimals, max_supply)?)
-        .with_component(AuthControlled::allow_all())
-        .with_auth_component(auth_component)
+    let faucet = FungibleFaucet::builder()
+        .name(name)
+        .symbol(symbol)
+        .decimals(decimals)
+        .max_supply(
+            miden_client::asset::AssetAmount::new(max_supply)
+                .context("max supply exceeds the maximum asset amount")?,
+        )
         .build()
-        .context("failed to create basic fungible faucet account")?;
+        .context("failed to build fungible faucet component")?;
+
+    let auth_method = AuthMethod::SingleSig {
+        approver: (secret.public_key().to_commitment().into(), AuthScheme::Falcon512Poseidon2),
+    };
+
+    // Permissionless mint/burn/send/receive policies.
+    let token_policy_manager = TokenPolicyManager::new()
+        .with_mint_policy(MintPolicyConfig::AllowAll, PolicyRegistration::Active)
+        .context("failed to set mint policy")?
+        .with_burn_policy(BurnPolicyConfig::AllowAll, PolicyRegistration::Active)
+        .context("failed to set burn policy")?
+        .with_send_policy(TransferPolicy::AllowAll, PolicyRegistration::Active)
+        .context("failed to set send policy")?
+        .with_receive_policy(TransferPolicy::AllowAll, PolicyRegistration::Active)
+        .context("failed to set receive policy")?;
+
+    let account = create_fungible_faucet(
+        rng.random(),
+        faucet,
+        AccountType::Public,
+        auth_method,
+        AccessControl::AuthControlled,
+        token_policy_manager,
+    )
+    .context("failed to create basic fungible faucet account")?;
 
     Ok((account, AuthSecretKey::Falcon512Poseidon2(secret)))
 }
@@ -608,6 +644,7 @@ mod tests {
     use clap::Parser;
     use fantoccini::ClientBuilder;
     use miden_client::account::{AccountFile, AccountId, Address, NetworkId};
+    use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
     use miden_client_sqlite_store::SqliteStore;
     use rand::SeedableRng;
     use serde_json::{Map, json};
@@ -821,7 +858,8 @@ mod tests {
         assert_eq!(title, "Miden Faucet");
 
         let network_id = NetworkId::Testnet;
-        let account_id = AccountId::try_from(0).unwrap();
+        let account_id =
+            AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE).unwrap();
         let address = Address::new(account_id);
         let address_bech32 = address.encode(network_id);
 
@@ -902,7 +940,7 @@ mod tests {
     async fn run_faucet_server(stub_node_url: Url) -> String {
         let config = ClientConfig {
             node_url: Some(stub_node_url.clone()),
-            timeout: Duration::from_millis(5000),
+            timeout: Duration::from_secs(5),
             network: FaucetNetwork::Localhost,
             store_path: temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())),
             remote_tx_prover_url: None,
@@ -943,7 +981,7 @@ mod tests {
                         frontend_bind_port: 8080,
                         no_frontend: false,
                         max_claimable_amount: 1_000_000_000,
-                        pow_secret: "test".to_string(),
+                        pow_secret: Some("test".to_string()),
                         pow_challenge_lifetime: Duration::from_secs(30),
                         pow_cleanup_interval: Duration::from_secs(1),
                         pow_growth_rate: 1.0,

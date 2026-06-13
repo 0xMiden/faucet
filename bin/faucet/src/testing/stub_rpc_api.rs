@@ -12,13 +12,6 @@ pub struct StubRpcApi;
 
 #[tonic::async_trait]
 impl api_server::Api for StubRpcApi {
-    async fn check_nullifiers(
-        &self,
-        _request: Request<proto::rpc::NullifierList>,
-    ) -> Result<Response<proto::rpc::CheckNullifiersResponse>, Status> {
-        unimplemented!()
-    }
-
     async fn get_block_header_by_number(
         &self,
         _request: Request<proto::rpc::BlockHeaderByNumberRequest>,
@@ -49,17 +42,45 @@ impl api_server::Api for StubRpcApi {
         unimplemented!()
     }
 
-    async fn submit_proven_transaction(
+    async fn submit_proven_tx(
         &self,
         _request: Request<proto::transaction::ProvenTransaction>,
     ) -> Result<Response<proto::blockchain::BlockNumber>, Status> {
         Ok(Response::new(proto::blockchain::BlockNumber { block_num: 0 }))
     }
 
-    async fn submit_proven_batch(
+    async fn submit_proven_tx_batch(
         &self,
         _request: Request<proto::transaction::TransactionBatch>,
     ) -> Result<Response<proto::blockchain::BlockNumber>, Status> {
+        unimplemented!()
+    }
+
+    type BlockSubscriptionStream = std::pin::Pin<
+        Box<
+            dyn tokio_stream::Stream<Item = Result<proto::rpc::BlockSubscriptionResponse, Status>>
+                + Send,
+        >,
+    >;
+
+    async fn block_subscription(
+        &self,
+        _request: Request<proto::rpc::BlockSubscriptionRequest>,
+    ) -> Result<Response<Self::BlockSubscriptionStream>, Status> {
+        unimplemented!()
+    }
+
+    type ProofSubscriptionStream = std::pin::Pin<
+        Box<
+            dyn tokio_stream::Stream<Item = Result<proto::rpc::ProofSubscriptionResponse, Status>>
+                + Send,
+        >,
+    >;
+
+    async fn proof_subscription(
+        &self,
+        _request: Request<proto::rpc::ProofSubscriptionRequest>,
+    ) -> Result<Response<Self::ProofSubscriptionStream>, Status> {
         unimplemented!()
     }
 
@@ -72,7 +93,7 @@ impl api_server::Api for StubRpcApi {
 
     async fn get_block_by_number(
         &self,
-        _request: Request<proto::blockchain::BlockNumber>,
+        _request: Request<proto::blockchain::BlockRequest>,
     ) -> Result<Response<proto::blockchain::MaybeBlock>, Status> {
         unimplemented!()
     }
@@ -150,16 +171,17 @@ impl api_server::Api for StubRpcApi {
         let mock_chain = MockChain::new();
 
         Ok(Response::new(proto::rpc::SyncChainMmrResponse {
-            block_range: Some(proto::rpc::BlockRange { block_from: 0, block_to: Some(0) }),
+            block_range: Some(proto::rpc::BlockRange { block_from: 0, block_to: 0 }),
             mmr_delta: Some(proto::primitives::MmrDelta { forest: 0, data: vec![] }),
             block_header: Some(mock_chain.latest_block_header().into()),
+            block_signature: None,
         }))
     }
 
-    async fn get_note_error(
+    async fn get_network_note_status(
         &self,
         _request: Request<proto::note::NoteId>,
-    ) -> Result<Response<proto::rpc::GetNoteErrorResponse>, Status> {
+    ) -> Result<Response<proto::rpc::GetNetworkNoteStatusResponse>, Status> {
         unimplemented!()
     }
 }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.0 (2026-06-12)
+
+- Added `note_transport_url` field to the `/get_metadata` endpoint response ([#243](https://github.com/0xMiden/faucet/pull/243)).
+- Generate a random PoW secret at startup when `--pow-secret` parameter is unset ([#251](https://github.com/0xMiden/faucet/pull/251)).
+
 ## 0.14.3 (2026-04-29)
 
 - Updated miden-client dependency to v0.14.5 ([#244](https://github.com/0xMiden/faucet/pull/244)).

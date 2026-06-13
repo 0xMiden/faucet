@@ -6,6 +6,7 @@ use axum::{Json, Router};
 use clap::Parser;
 use miden_client::account::AccountId;
 use miden_client::note::NoteId;
+use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
 use miden_client::utils::ToHex;
 use miden_faucet_client::mint::MintCmd;
 use miden_faucet_lib::requests::{
@@ -35,8 +36,7 @@ struct AppState {
 
 #[tokio::test]
 async fn mint_command_requests_public_note() {
-    let account_hex = "0xca8203e8e58cf72049b061afca78ce";
-    let account_id = AccountId::from_hex(account_hex).unwrap();
+    let account_id = AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE).unwrap();
     let expected_amount = 123_000;
 
     // Create a valid Challenge with target = u64::MAX so any nonce will solve it
