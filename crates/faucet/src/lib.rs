@@ -16,8 +16,13 @@ use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, RpcError};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequest,
-    TransactionRequestBuilder, TransactionRequestError, TransactionScript,
+    LocalTransactionProver,
+    TransactionId,
+    TransactionProver,
+    TransactionRequest,
+    TransactionRequestBuilder,
+    TransactionRequestError,
+    TransactionScript,
 };
 use miden_client::utils::Deserializable;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
@@ -682,8 +687,16 @@ mod tests {
 
     use miden_client::account::AccountType;
     use miden_client::account::component::{
-        AccessControl, AuthScheme, BurnPolicyConfig, FungibleFaucet, MintPolicyConfig,
-        PolicyRegistration, TokenName, TokenPolicyManager, TransferPolicy, create_fungible_faucet,
+        AccessControl,
+        AuthScheme,
+        BurnPolicyConfig,
+        FungibleFaucet,
+        MintPolicyConfig,
+        PolicyRegistration,
+        TokenName,
+        TokenPolicyManager,
+        TransferPolicy,
+        create_fungible_faucet,
     };
     use miden_client::asset::TokenSymbol;
     use miden_client::auth::{AuthMethod, AuthSecretKey};

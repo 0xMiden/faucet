@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.1 (2026-06-15)
+
+- Fixed faucet minting to stamp generated assets with the callback flag derived from the faucet account.
+
 ## 0.15.0 (TBD)
 
 - Added `note_transport_url` field to the `/get_metadata` endpoint response ([#243](https://github.com/0xMiden/faucet/pull/243)).
