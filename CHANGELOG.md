@@ -4,7 +4,7 @@
 
 - Fixed faucet minting to stamp generated assets with the callback flag derived from the faucet account.
 
-## 0.15.0 (TBD)
+## 0.15.0 (2026-06-12)
 
 - Added `note_transport_url` field to the `/get_metadata` endpoint response ([#243](https://github.com/0xMiden/faucet/pull/243)).
 - Generate a random PoW secret at startup when `--pow-secret` parameter is unset ([#251](https://github.com/0xMiden/faucet/pull/251)).
