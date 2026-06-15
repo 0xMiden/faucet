@@ -16,13 +16,8 @@ use miden_client::rpc::{Endpoint, GrpcClient, GrpcError, RpcError};
 use miden_client::store::{NoteFilter, TransactionFilter};
 use miden_client::sync::{StateSync, StateSyncInput, SyncSummary};
 use miden_client::transaction::{
-    LocalTransactionProver,
-    TransactionId,
-    TransactionProver,
-    TransactionRequest,
-    TransactionRequestBuilder,
-    TransactionRequestError,
-    TransactionScript,
+    LocalTransactionProver, TransactionId, TransactionProver, TransactionRequest,
+    TransactionRequestBuilder, TransactionRequestError, TransactionScript,
 };
 use miden_client::utils::Deserializable;
 use miden_client::{Client, ClientError, Felt, RemoteTransactionProver, Word};
@@ -686,18 +681,9 @@ mod tests {
     use std::env::temp_dir;
 
     use miden_client::account::AccountType;
-    use miden_client::address::AddressId;
     use miden_client::account::component::{
-        AccessControl,
-        AuthScheme,
-        BurnPolicyConfig,
-        FungibleFaucet,
-        MintPolicyConfig,
-        PolicyRegistration,
-        TokenName,
-        TokenPolicyManager,
-        TransferPolicy,
-        create_fungible_faucet,
+        AccessControl, AuthScheme, BurnPolicyConfig, FungibleFaucet, MintPolicyConfig,
+        PolicyRegistration, TokenName, TokenPolicyManager, TransferPolicy, create_fungible_faucet,
     };
     use miden_client::asset::TokenSymbol;
     use miden_client::auth::{AuthMethod, AuthSecretKey};
@@ -716,38 +702,50 @@ mod tests {
     async fn batch_requests() {
         let batch_size = 32;
 
-        let (tx_mint_requests, rx_mint_requests) = mpsc::channel(1000);
-        let mut receivers = vec![];
-        for i in 0..batch_size {
-            let (sender, receiver) = oneshot::channel();
-            let mint_request = MintRequest {
-                account_id: AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE)
+        for (with_transfer_policies, expected_callbacks) in
+            [(false, AssetCallbackFlag::Disabled), (true, AssetCallbackFlag::Enabled)]
+        {
+            let (tx_mint_requests, rx_mint_requests) = mpsc::channel(1000);
+            let mut receivers = vec![];
+            for i in 0..batch_size {
+                let (sender, receiver) = oneshot::channel();
+                let mint_request = MintRequest {
+                    account_id: AccountId::try_from(
+                        ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE,
+                    )
                     .unwrap(),
-                note_type: if i % 2 == 0 {
-                    NoteType::Public
-                } else {
-                    NoteType::Private
-                },
-                asset_amount: AssetAmount::new(100_000_000).unwrap(),
-            };
-            tx_mint_requests.send((mint_request, sender)).await.unwrap();
-            receivers.push(receiver);
-        }
-        // Close channel after all requests are sent
-        drop(tx_mint_requests);
+                    note_type: if i % 2 == 0 {
+                        NoteType::Public
+                    } else {
+                        NoteType::Private
+                    },
+                    asset_amount: AssetAmount::new(100_000_000).unwrap(),
+                };
+                tx_mint_requests.send((mint_request, sender)).await.unwrap();
+                receivers.push(receiver);
+            }
+            // Close channel after all requests are sent
+            drop(tx_mint_requests);
 
-        let store = Arc::new(
-            SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
-                .await
-                .unwrap(),
-        );
-        let faucet = build_faucet(store.clone()).await;
-        Box::pin(faucet.run(rx_mint_requests, batch_size)).await.unwrap();
+            let store = Arc::new(
+                SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
+                    .await
+                    .unwrap(),
+            );
+            let faucet = build_faucet(store.clone(), with_transfer_policies).await;
+            assert_eq!(faucet.asset_callbacks, expected_callbacks);
 
-        for receiver in receivers {
-            let response = receiver.await.unwrap().unwrap();
-            let notes = store.get_output_notes(NoteFilter::Unique(response.note_id)).await.unwrap();
-            assert_eq!(notes.len(), 1);
+            Box::pin(faucet.run(rx_mint_requests, batch_size)).await.unwrap();
+
+            for receiver in receivers {
+                let response = receiver.await.unwrap().unwrap();
+                let notes =
+                    store.get_output_notes(NoteFilter::Unique(response.note_id)).await.unwrap();
+                assert_eq!(notes.len(), 1);
+
+                let asset = notes[0].assets().iter().next().unwrap().unwrap_fungible();
+                assert_eq!(asset.callbacks(), expected_callbacks);
+            }
         }
     }
 
@@ -755,7 +753,7 @@ mod tests {
     // ---------------------------------------------------------------------------------------------
 
     /// Builds a faucet using a mock client.
-    async fn build_faucet(store: Arc<dyn Store>) -> Faucet {
+    async fn build_faucet(store: Arc<dyn Store>, with_transfer_policies: bool) -> Faucet {
         let secret = SecretKey::new();
         let symbol = TokenSymbol::try_from("TEST").unwrap();
         let name = TokenName::new(&symbol.to_string()).unwrap();
@@ -776,11 +774,16 @@ mod tests {
             .with_mint_policy(MintPolicyConfig::AllowAll, PolicyRegistration::Active)
             .unwrap()
             .with_burn_policy(BurnPolicyConfig::AllowAll, PolicyRegistration::Active)
-            .unwrap()
-            .with_send_policy(TransferPolicy::AllowAll, PolicyRegistration::Active)
-            .unwrap()
-            .with_receive_policy(TransferPolicy::AllowAll, PolicyRegistration::Active)
             .unwrap();
+        let token_policy_manager = if with_transfer_policies {
+            token_policy_manager
+                .with_send_policy(TransferPolicy::AllowAll, PolicyRegistration::Active)
+                .unwrap()
+                .with_receive_policy(TransferPolicy::AllowAll, PolicyRegistration::Active)
+                .unwrap()
+        } else {
+            token_policy_manager
+        };
 
         let account = create_fungible_faucet(
             rand::random(),
