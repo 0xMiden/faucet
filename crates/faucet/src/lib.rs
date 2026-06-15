@@ -6,7 +6,7 @@ use std::time::Duration;
 use anyhow::Context;
 use miden_client::account::component::FungibleFaucet;
 use miden_client::account::{Account, AccountId, Address, NetworkId};
-use miden_client::asset::{AssetCallbackFlag, FungibleAsset};
+use miden_client::asset::{AssetCallbackFlag, AssetCallbacks, FungibleAsset};
 use miden_client::auth::AuthSecretKey;
 use miden_client::builder::ClientBuilder;
 use miden_client::crypto::{RandomCoin, Rpo256};
@@ -79,6 +79,9 @@ pub struct Faucet {
     issuance: watch::Sender<AssetAmount>,
     max_supply: AssetAmount,
     script: TransactionScript,
+    /// Callbacks flag stamped onto minted asset keys; must match the faucet account, else
+    /// `mint_and_send` rejects the mint.
+    asset_callbacks: AssetCallbackFlag,
 }
 
 /// Configuration for initializing and loading a faucet.
@@ -178,6 +181,7 @@ impl Faucet {
         let account = client.get_account(account_id).await?.context("no account found")?;
 
         let token_metadata = FungibleFaucet::try_from(account.storage())?;
+        let asset_callbacks = asset_callback_flag(&account);
         let tx_prover: Arc<dyn TransactionProver> = match config.remote_tx_prover_url.clone() {
             Some(url) => Arc::new(RemoteTransactionProver::new(url)),
             None => Arc::new(LocalTransactionProver::default()),
@@ -202,6 +206,7 @@ impl Faucet {
             issuance,
             max_supply,
             script,
+            asset_callbacks,
         })
     }
 
@@ -315,7 +320,8 @@ impl Faucet {
             let rng_seed = Word::new(auth_seed.map(Felt::new_unchecked));
             RandomCoin::new(rng_seed)
         };
-        let notes = build_p2id_notes(&self.faucet_id(), &valid_requests, &mut rng)?;
+        let notes =
+            build_p2id_notes(&self.faucet_id(), &valid_requests, self.asset_callbacks, &mut rng)?;
         let note_ids = notes.iter().map(Note::id).collect::<Vec<_>>();
 
         // Build and submit transaction
@@ -399,8 +405,8 @@ impl Faucet {
             // SAFETY: these are p2id notes with only one fungible asset
             let asset = note.assets().iter().next().unwrap().unwrap_fungible();
             let amount = asset.amount().as_u64();
-            // The faucet registers transfer policies, which enable asset callbacks.
-            let asset_key = asset.with_callbacks(AssetCallbackFlag::Enabled).to_key_word();
+            // Match the key `mint_and_send` derives for this faucet.
+            let asset_key = asset.with_callbacks(self.asset_callbacks).to_key_word();
 
             note_data.extend(note.recipient().digest().iter().rev());
             note_data.push(Felt::from(note.metadata().note_type()));
@@ -618,6 +624,26 @@ fn grpc_status_code(kind: &GrpcError) -> i64 {
     }
 }
 
+/// Returns the callbacks flag that minted assets must carry to match this faucet account.
+///
+/// Mirrors the kernel's `has_callbacks`: enabled iff a callback storage slot is present and
+/// non-empty.
+fn asset_callback_flag(account: &Account) -> AssetCallbackFlag {
+    let storage = account.storage();
+    let has_callbacks = [
+        AssetCallbacks::on_before_asset_added_to_account_slot(),
+        AssetCallbacks::on_before_asset_added_to_note_slot(),
+    ]
+    .into_iter()
+    .any(|slot_name| storage.get_item(slot_name).is_ok_and(|word| !word.is_empty()));
+
+    if has_callbacks {
+        AssetCallbackFlag::Enabled
+    } else {
+        AssetCallbackFlag::Disabled
+    }
+}
+
 /// Builds a collection of `P2ID` notes from a set of mint requests.
 ///
 /// # Errors
@@ -627,18 +653,18 @@ fn grpc_status_code(kind: &GrpcError) -> i64 {
 fn build_p2id_notes(
     source: &FaucetId,
     requests: &[MintRequest],
+    asset_callbacks: AssetCallbackFlag,
     rng: &mut RandomCoin,
 ) -> Result<Vec<Note>, NoteError> {
     // If building a note fails, we discard the whole batch. Should never happen, since account
     // ids are validated on the request level.
     let mut notes = Vec::new();
     for request in requests {
-        // The faucet enables asset callbacks (it registers transfer policies), so the asset it
-        // mints carries the `Enabled` callbacks flag
+        // Match the asset `mint_and_send` mints, so the local note id matches on-chain.
         // SAFETY: source is definitely a faucet account, and the amount is valid.
         let asset = FungibleAsset::new(source.account_id, request.asset_amount.base_units())
             .unwrap()
-            .with_callbacks(AssetCallbackFlag::Enabled);
+            .with_callbacks(asset_callbacks);
         let note = P2idNote::create(
             source.account_id,
             request.account_id,
@@ -660,6 +686,7 @@ mod tests {
     use std::env::temp_dir;
 
     use miden_client::account::AccountType;
+    use miden_client::address::AddressId;
     use miden_client::account::component::{
         AccessControl,
         AuthScheme,
@@ -783,6 +810,7 @@ mod tests {
         client.add_account(&account, false).await.unwrap();
 
         let (issuance, _) = watch::channel(AssetAmount::new(0).unwrap());
+        let asset_callbacks = asset_callback_flag(&account);
         Faucet {
             id: FaucetId::new(account.id(), NetworkId::Testnet),
             client,
@@ -795,6 +823,7 @@ mod tests {
             issuance,
             max_supply: AssetAmount::new(1_000_000_000_000).unwrap(),
             script: TransactionScript::read_from_bytes(TX_SCRIPT).unwrap(),
+            asset_callbacks,
         }
     }
 }
