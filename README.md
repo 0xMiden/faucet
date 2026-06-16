@@ -4,7 +4,7 @@ Token faucet application for Miden testnet.
 
 ## Documentation
 
-For comprehensive guides, API reference, and examples, see the [Miden Faucet Documentation](https://0xmiden.github.io/miden-faucet).
+For comprehensive guides, API reference, and examples, see the [Miden Faucet Documentation](https://0xmiden.github.io/faucet).
 
 ## Running the faucet
 
