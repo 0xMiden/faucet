@@ -5,4 +5,4 @@ language    = "en"
 title       = "The Miden Faucet"
 
 [output.html]
-git-repository-url = "https://github.com/0xMiden/miden-faucet"
+git-repository-url = "https://github.com/0xMiden/faucet"

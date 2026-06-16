@@ -4,7 +4,7 @@ We provide Debian packages for official releases for the Faucet software. Altern
 
 ## Debian package
 
-Official Debian packages are available under our [releases](https://github.com/0xMiden/miden-faucet/releases) page.
+Official Debian packages are available under our [releases](https://github.com/0xMiden/faucet/releases) page.
 Both `amd64` and `arm64` packages are available.
 
 Note that the packages include a `systemd` service which is disabled by default.
@@ -55,16 +55,16 @@ this for advanced use only. The incantation is a little different as you'll be t
 
 ```sh
 # Install from a specific branch
-cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-faucet --branch <branch>
-cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-faucet-client --branch <branch>
+cargo install --locked --git https://github.com/0xMiden/faucet miden-faucet --branch <branch>
+cargo install --locked --git https://github.com/0xMiden/faucet miden-faucet-client --branch <branch>
 
 # Install a specific tag
-cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-faucet --tag <tag>
-cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-faucet-client --tag <tag>
+cargo install --locked --git https://github.com/0xMiden/faucet miden-faucet --tag <tag>
+cargo install --locked --git https://github.com/0xMiden/faucet miden-faucet-client --tag <tag>
 
 # Install a specific git revision
-cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-faucet --rev <git-sha>
-cargo install --locked --git https://github.com/0xMiden/miden-faucet miden-faucet-client --rev <git-sha>
+cargo install --locked --git https://github.com/0xMiden/faucet miden-faucet --rev <git-sha>
+cargo install --locked --git https://github.com/0xMiden/faucet miden-faucet-client --rev <git-sha>
 
 > Use `miden-faucet` to initialize/start the faucet service, and `miden-faucet-client` to mint from a running faucet.
 ```

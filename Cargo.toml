@@ -10,7 +10,7 @@ exclude      = [".github/"]
 homepage     = "https://miden.xyz"
 license      = "MIT"
 readme       = "README.md"
-repository   = "https://github.com/0xMiden/miden-faucet"
+repository   = "https://github.com/0xMiden/faucet"
 rust-version = "1.93"
 version      = "0.15.0"
 
