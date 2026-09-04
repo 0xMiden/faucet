@@ -2,6 +2,7 @@
 
 ## 0.16.0 (TBD)
 
+- `/get_note` and `/send_note` now answer with a status code that matches the failure: a note that is not cached is `404` instead of `400`, a faucet started without a note transport URL is `501`, and a transport layer that is unreachable or answers unusably is `502`. Previously every one of these was reported as a `400`, so an outage of the note transport service looked like a client error ([#297](https://github.com/0xMiden/faucet/pull/297)).
 - Updated miden-client dependency to v0.16.0-rc.4 (miden-protocol / miden-standards / miden-testing v0.16.0-rc.9) and `miden-node-proto-build` to v0.16.0-rc.5, bumped the workspace version to 0.16.0-rc.3, and updated the declared `rust-version` and the Docker builder image to 1.98 ([#293](https://github.com/0xMiden/faucet/pull/293)).
 - Updated the frontend `@miden-sdk/miden-sdk` and wallet adapter dependencies to `v0.16.0-rc.6` ([#293](https://github.com/0xMiden/faucet/pull/293)).
 - Updated miden-client dependency to v0.16.0-rc.3 (miden-protocol / miden-standards / miden-testing v0.16.0-rc.6) and `miden-node-proto-build` to v0.16.0-rc.2, and bumped the workspace version to 0.16.0-rc.2 ([#286](https://github.com/0xMiden/faucet/pull/286)).

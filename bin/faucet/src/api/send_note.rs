@@ -70,6 +70,19 @@ pub enum SendNoteError {
 }
 
 impl SendNoteError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::InvalidNoteId => StatusCode::BAD_REQUEST,
+            Self::NoteNotFound => StatusCode::NOT_FOUND,
+            // The note transport layer is a server-side dependency, so none of its failures are
+            // caused by the request. `Disabled` is a deployment that was never configured with a
+            // transport URL, which no client can correct by retrying differently; every other
+            // variant is the upstream service being unreachable or answering unusably.
+            Self::NoteTransportError(NoteTransportError::Disabled) => StatusCode::NOT_IMPLEMENTED,
+            Self::NoteTransportError(_) => StatusCode::BAD_GATEWAY,
+        }
+    }
+
     /// Take care to not expose internal errors here.
     fn user_facing_error(&self) -> String {
         match self {
@@ -84,6 +97,46 @@ impl SendNoteError {
 
 impl IntoResponse for SendNoteError {
     fn into_response(self) -> axum::response::Response {
-        (StatusCode::BAD_REQUEST, self.user_facing_error()).into_response()
+        (self.status_code(), self.user_facing_error()).into_response()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_malformed_note_id_is_a_client_error() {
+        assert_eq!(SendNoteError::InvalidNoteId.status_code(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn a_note_that_is_not_cached_is_not_found() {
+        assert_eq!(SendNoteError::NoteNotFound.status_code(), StatusCode::NOT_FOUND);
+    }
+
+    /// A faucet started without a transport URL cannot serve this endpoint at all. That is a
+    /// deployment decision, not something the caller got wrong.
+    #[test]
+    fn a_disabled_transport_layer_is_not_implemented() {
+        assert_eq!(
+            SendNoteError::NoteTransportError(NoteTransportError::Disabled).status_code(),
+            StatusCode::NOT_IMPLEMENTED,
+        );
+    }
+
+    /// An unreachable or misbehaving transport service is an upstream failure, so it has to be
+    /// reported as one: a 4xx would tell operators and clients that the caller was at fault.
+    #[test]
+    fn an_upstream_transport_failure_is_a_gateway_error() {
+        for error in [
+            NoteTransportError::Network("connection reset".to_string()),
+            NoteTransportError::PaginationDidNotTerminate(64),
+        ] {
+            assert_eq!(
+                SendNoteError::NoteTransportError(error).status_code(),
+                StatusCode::BAD_GATEWAY,
+            );
+        }
     }
 }

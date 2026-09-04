@@ -83,6 +83,15 @@ pub enum NoteRequestError {
 }
 
 impl NoteRequestError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::InvalidNoteId => StatusCode::BAD_REQUEST,
+            // The note id parsed, so the request itself is well formed; the note is simply not in
+            // the cache, either because it was never minted here or because it has been pruned.
+            Self::NoteNotFound => StatusCode::NOT_FOUND,
+        }
+    }
+
     /// Take care to not expose internal errors here.
     fn user_facing_error(&self) -> String {
         match self {
@@ -94,6 +103,21 @@ impl NoteRequestError {
 
 impl IntoResponse for NoteRequestError {
     fn into_response(self) -> axum::response::Response {
-        (StatusCode::BAD_REQUEST, self.user_facing_error()).into_response()
+        (self.status_code(), self.user_facing_error()).into_response()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_malformed_note_id_is_a_client_error() {
+        assert_eq!(NoteRequestError::InvalidNoteId.status_code(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn a_note_that_is_not_cached_is_not_found() {
+        assert_eq!(NoteRequestError::NoteNotFound.status_code(), StatusCode::NOT_FOUND);
     }
 }
