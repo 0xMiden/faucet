@@ -119,7 +119,9 @@ docker run --rm -p 8000:8000 -p 8080:8080 \
   ghcr.io/0xmiden/miden-faucet:<version>
 ```
 
-See `bin/faucet/.env` for all options.
+See `bin/faucet/.env.example` for all options. Copy it to `bin/faucet/.env` and
+fill in your values — `.env` is git-ignored, which `.env.example` is not, so keep
+real secrets such as `MIDEN_FAUCET_POW_SECRET` out of the template.
 
 ## Requesting tokens from a live faucet
 

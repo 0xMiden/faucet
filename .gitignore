@@ -17,6 +17,15 @@ target
 keystore/
 faucet_client_store.sqlite3
 
+# Local environment files. bin/faucet/.env.example is the committed template;
+# a real .env holds MIDEN_FAUCET_POW_SECRET (the HMAC key for the faucet's
+# proof-of-work rate limiter) and the operator account path, so it must never be
+# committed. Before this entry existed, bin/faucet/.env was itself tracked, and
+# filling in the secret then running `git add -A` published it.
+.env
+.env.*
+!.env.example
+
 # Node files used for examples
 node_modules/
 package-lock.json
