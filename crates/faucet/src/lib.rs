@@ -657,7 +657,7 @@ impl Faucet {
                 cache.insert(note.id().to_hex(), CachedP2idNote { note, after_block_num });
             }
         }
-        // Refresh the issuance cache from the store after submitting the transaction
+        // Refresh from the store without dropping pending MINT promises (see `refresh_issuance`).
         self.refresh_issuance().await;
 
         Self::send_responses(response_senders, p2id_note_ids, tx_id);
@@ -681,6 +681,10 @@ impl Faucet {
     /// Updates the issuance counter for the requested amounts and filters the requests that exceed
     /// the available supply. For the filtered requests, the response sender is notified with an
     /// error.
+    ///
+    /// Accepted amounts are written back to [`Self::issuance`] immediately so later batches cannot
+    /// over-promise while submitted MINT notes are still pending network consumption (and therefore
+    /// absent from on-chain `token_supply`).
     ///
     /// Returns a tuple of valid requests and response senders.
     #[instrument(target = COMPONENT, name = "faucet.mint.filter_requests_by_supply", skip_all)]
@@ -709,6 +713,8 @@ impl Faucet {
             // SAFETY: creating an asset amount with the max is always valid
             issuance = issuance.checked_add(requested_amount).unwrap_or(AssetAmount::max());
         }
+        // Persist the running total so subsequent mint batches observe pending promises.
+        self.issuance.send_replace(issuance);
         if self.available_supply(issuance).is_none() {
             error!("Faucet has run out of tokens");
         }
@@ -891,11 +897,16 @@ impl Faucet {
     }
 
     /// Reads the current issuance from the client's store and updates the watch channel.
+    ///
+    /// Never lowers the counter below the value already promised for in-flight MINT notes.
+    /// On-chain `token_supply` only advances when those notes are consumed, so a naive store
+    /// replace would reopen capacity that has already been allocated.
     async fn refresh_issuance(&self) {
-        let new_issuance = Self::read_issuance_from_store(&self.client, self.id.account_id)
+        let store_issuance = Self::read_issuance_from_store(&self.client, self.id.account_id)
             .await
             .unwrap_or(AssetAmount::max());
-        self.issuance.send_replace(new_issuance);
+        let promised = *self.issuance.borrow();
+        self.issuance.send_replace(store_issuance.max(promised));
     }
 
     /// Reads the current issuance from the client's store.
@@ -1972,6 +1983,53 @@ mod tests {
     async fn operator_fee_balance(faucet: &Faucet, fee_parameters: &FeeParameters) -> u64 {
         let operator = faucet.client.account_reader(faucet.operator_id());
         fee_asset_balance(&operator, fee_parameters).await.unwrap()
+    }
+
+    /// Pending MINT promises must stick on the issuance counter so a later batch cannot
+    /// re-allocate capacity that is still waiting for network consumption (#290).
+    #[tokio::test]
+    async fn filter_requests_by_supply_persists_pending_issuance() {
+        let store = Arc::new(
+            SqliteStore::new(temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())))
+                .await
+                .unwrap(),
+        );
+        let mut faucet = build_faucet(store).await;
+        faucet.max_supply = AssetAmount::new(150).unwrap();
+        faucet.issuance.send_replace(AssetAmount::new(0).unwrap());
+
+        let account =
+            AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE).unwrap();
+        let (tx1, rx1) = oneshot::channel();
+        let (tx2, rx2) = oneshot::channel();
+
+        let (accepted, _) = faucet.filter_requests_by_supply([(
+            MintRequest {
+                account_id: account,
+                note_type: NoteType::Public,
+                asset_amount: AssetAmount::new(100).unwrap(),
+            },
+            tx1,
+        )]);
+        assert_eq!(accepted.len(), 1);
+        assert_eq!(*faucet.issuance.borrow(), AssetAmount::new(100).unwrap());
+
+        let (accepted, _) = faucet.filter_requests_by_supply([(
+            MintRequest {
+                account_id: account,
+                note_type: NoteType::Public,
+                asset_amount: AssetAmount::new(100).unwrap(),
+            },
+            tx2,
+        )]);
+        assert!(accepted.is_empty(), "second batch must see the pending promise");
+        assert!(matches!(
+            rx2.await.unwrap(),
+            Err(MintError::AvailableSupplyExceeded)
+        ));
+        // First sender was unused (accepted path does not reply through filter).
+        drop(rx1);
+        assert_eq!(*faucet.issuance.borrow(), AssetAmount::new(100).unwrap());
     }
 
     /// Builds an arbitrary P2ID note; only its presence matters to the pruning tests.
