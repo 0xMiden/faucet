@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `start` now rejects a non-positive or non-finite `--pow-growth-rate` and a zero `--base-amount` at startup, and the PoW rate limiter clamps the load multiplier to at least `1`, so a misconfigured growth rate no longer makes every challenge request panic with a division by zero ([#304](https://github.com/0xMiden/faucet/issues/304)).
+
 ## 0.16.0 (2026-09-08)
 
 - Updated `miden-client` and `miden-node-proto-build` dependencies to v0.16.0, bumped the workspace version to 0.16.0, and updated the declared `rust-version` and the Docker builder image to 1.98.1 ([#300](https://github.com/0xMiden/faucet/pull/300)).

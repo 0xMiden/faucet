@@ -362,3 +362,24 @@ async fn submit_challenge_while_previous_one_is_not_cleaned_up() {
     assert_eq!(pow.challenges.read().unwrap().num_challenges_for_domain(&domain_1), 1);
     assert_eq!(pow.challenges.read().unwrap().num_challenges_for_domain(&domain_2), 1);
 }
+
+/// A non-positive or `NaN` growth rate must not zero out the load difficulty: the challenge target
+/// is `u64::MAX / difficulty`, so a zero difficulty would make `build_challenge` divide by zero.
+#[tokio::test]
+async fn non_positive_growth_rate_falls_back_to_baseline_difficulty() {
+    for growth_rate in [0.0, -0.5, f64::NAN] {
+        let pow = PoWRateLimiter::new_with_cleanup(
+            [1u8; 32],
+            PoWRateLimiterConfig {
+                challenge_lifetime: Duration::from_secs(30),
+                growth_rate,
+                baseline: 4,
+                cleanup_interval: Duration::from_secs(2),
+            },
+        );
+
+        assert_eq!(pow.get_load_difficulty([0u8; 32]), 1 << 4, "growth rate {growth_rate}");
+        let challenge = pow.build_challenge([0u8; 32], [0u8; 32], 1);
+        assert_eq!(challenge.target(), u64::MAX >> 4, "growth rate {growth_rate}");
+    }
+}

@@ -119,7 +119,11 @@ impl PoWRateLimiter {
     /// Returns the load difficulty for a given domain.
     ///
     /// The load difficulty is computed as:
-    /// `2^baseline * ceil((num_active_challenges + 1) * growth_rate)`
+    /// `2^baseline * max(1, ceil((num_active_challenges + 1) * growth_rate))`
+    ///
+    /// The multiplier is clamped to at least `1` so that a non-positive (or `NaN`) growth rate
+    /// degrades to a constant `2^baseline` difficulty instead of a zero difficulty, which the
+    /// challenge target could not be derived from.
     pub fn get_load_difficulty(&self, domain: impl Into<Domain>) -> u64 {
         let num_challenges = self
             .challenges
@@ -128,9 +132,12 @@ impl PoWRateLimiter {
             .num_challenges_for_domain(&domain.into());
 
         #[allow(clippy::cast_precision_loss, reason = "num_challenges is smaller than f64::MAX")]
-        #[allow(clippy::cast_sign_loss, reason = "growth_rate and num_challenges are positive")]
+        #[allow(
+            clippy::cast_sign_loss,
+            reason = "a negative product saturates to 0 and is clamped to 1 below"
+        )]
         let growth_multiplier =
-            ((num_challenges + 1) as f64 * self.config.growth_rate).ceil() as u64;
+            (((num_challenges + 1) as f64 * self.config.growth_rate).ceil() as u64).max(1);
         2_u64.pow(self.config.baseline.into()).saturating_mul(growth_multiplier)
     }
 
@@ -141,7 +148,7 @@ impl PoWRateLimiter {
     ///
     /// Where:
     /// * `request_difficulty = load_difficulty * request_complexity`
-    /// * `load_difficulty = 2^baseline * ceil((num_active_challenges + 1) * growth_rate)`
+    /// * `load_difficulty = 2^baseline * max(1, ceil((num_active_challenges + 1) * growth_rate))`
     fn get_challenge_target(&self, domain: &Domain, request_complexity: u64) -> u64 {
         if request_complexity == 0 {
             return u64::MAX;

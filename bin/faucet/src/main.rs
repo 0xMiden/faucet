@@ -189,7 +189,10 @@ pub enum Command {
         ///
         /// Meaning, the difficulty bits of the challenge will increase approximately by
         /// `log2(growth_rate * num_active_challenges)`.
-        #[arg(long = "pow-growth-rate", value_name = "F64", env = ENV_POW_GROWTH_RATE, default_value = "0.1")]
+        ///
+        /// Must be a finite number greater than zero: a zero or negative growth rate makes the
+        /// load difficulty zero, which no challenge target can be derived from.
+        #[arg(long = "pow-growth-rate", value_name = "F64", env = ENV_POW_GROWTH_RATE, default_value = "0.1", value_parser = parse_pow_growth_rate)]
         pow_growth_rate: f64,
 
         /// The interval at which the `PoW` challenge cache is cleaned up.
@@ -208,7 +211,9 @@ pub enum Command {
         ///
         /// The request complexity for challenges is computed as: `request_complexity = (amount /
         /// base_amount) + 1`
-        #[arg(long = "base-amount", value_name = "U64", env = ENV_BASE_AMOUNT, default_value = "100000000")]
+        ///
+        /// Must be at least 1, since the requested amount is divided by it.
+        #[arg(long = "base-amount", value_name = "U64", env = ENV_BASE_AMOUNT, default_value = "100000000", value_parser = clap::value_parser!(u64).range(1..))]
         base_amount: u64,
 
         /// Enables the exporting of traces for OpenTelemetry.
@@ -638,6 +643,19 @@ async fn remove_api_key_from_store(store: &SqliteStore, key: &ApiKey) -> anyhow:
 
 /// Parses the node endpoint from the cli arguments. If an explicit url is provided, it is used.
 /// Otherwise, it is derived from the specified network.
+/// Parses the `PoW` growth rate, rejecting values that would zero out the load difficulty.
+///
+/// `get_load_difficulty` multiplies the number of active challenges by this rate and rounds up, so
+/// a non-positive (or `NaN`) rate yields a difficulty of `0` and every challenge request divides by
+/// zero. Rejecting those values here fails at startup instead of on the first request.
+fn parse_pow_growth_rate(value: &str) -> Result<f64, String> {
+    let rate: f64 = value.parse().map_err(|err| format!("invalid growth rate: {err}"))?;
+    if !rate.is_finite() || rate <= 0.0 {
+        return Err(format!("growth rate must be a finite number greater than 0, got {value}"));
+    }
+    Ok(rate)
+}
+
 fn parse_node_endpoint(node_url: Option<Url>, network: &FaucetNetwork) -> anyhow::Result<Endpoint> {
     let url = if let Some(node_url) = node_url {
         node_url.to_string()
@@ -689,6 +707,46 @@ mod tests {
         let mut command_args = vec!["miden-faucet", "init"];
         command_args.extend_from_slice(args);
         Cli::try_parse_from(command_args)
+    }
+
+    /// Parses a `start` invocation, with `args` appended to the fixed prefix.
+    fn parse_start(args: &[&str]) -> Result<Cli, clap::Error> {
+        let mut command_args = vec!["miden-faucet", "start"];
+        command_args.extend_from_slice(args);
+        Cli::try_parse_from(command_args)
+    }
+
+    /// A non-positive or non-finite growth rate would make the load difficulty zero and every
+    /// challenge request divide by zero, so it must be rejected when parsing the CLI.
+    #[test]
+    fn start_rejects_non_positive_pow_growth_rate() {
+        for rate in ["0", "-0.5", "NaN", "inf"] {
+            // `--flag=value` keeps a leading `-` from being read as another flag.
+            let arg = format!("--pow-growth-rate={rate}");
+            let Err(error) = parse_start(&[&arg]) else {
+                panic!("--pow-growth-rate {rate} should be rejected")
+            };
+            assert_eq!(error.kind(), ErrorKind::ValueValidation, "rate {rate}");
+        }
+    }
+
+    #[test]
+    fn start_accepts_positive_pow_growth_rate() {
+        let cli = parse_start(&["--pow-growth-rate", "0.25"]).expect("0.25 is a valid rate");
+        let crate::Command::Start { pow_growth_rate, .. } = cli.command else {
+            panic!("expected the start command")
+        };
+        assert!((pow_growth_rate - 0.25).abs() < f64::EPSILON);
+    }
+
+    /// The requested amount is divided by the base amount, so zero must be rejected.
+    #[test]
+    fn start_rejects_zero_base_amount() {
+        let Err(error) = parse_start(&["--base-amount", "0"]) else {
+            panic!("--base-amount 0 should be rejected")
+        };
+        assert_eq!(error.kind(), ErrorKind::ValueValidation);
+        assert!(parse_start(&["--base-amount", "1"]).is_ok());
     }
 
     /// `--import` and `--faucet-account-id` are all-or-nothing: each requires the other.
