@@ -18,7 +18,6 @@ pub struct Metadata {
     pub decimals: u8,
     pub explorer_url: Option<Url>,
     pub base_amount: u64,
-    pub note_transport_url: Option<Url>,
 }
 
 // ENDPOINT
@@ -35,7 +34,6 @@ pub async fn get_metadata(State(server): State<ApiServer>) -> Json<GetMetadataRe
         explorer_url: metadata.explorer_url,
         pow_load_difficulty: server.rate_limiter.get_load_difficulty(ApiKey::default()),
         base_amount: metadata.base_amount,
-        note_transport_url: metadata.note_transport_url,
     })
 }
 
@@ -48,5 +46,4 @@ pub struct GetMetadataResponse {
     pub explorer_url: Option<Url>,
     pub pow_load_difficulty: u64,
     pub base_amount: u64,
-    pub note_transport_url: Option<Url>,
 }

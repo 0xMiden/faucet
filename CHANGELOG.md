@@ -3,6 +3,9 @@
 ## 0.17.0 (TBD)
 
 - Redesigned the faucet frontend: new hero illustration and typography, a single send button (notes are always public), inline minting and result views, a stats card for issuance and the faucet address, dark mode, and the Bread wallet logo on the connect button ([#306](https://github.com/0xMiden/faucet/pull/306) ([#312](https://github.com/0xMiden/faucet/pull/312))).
+## Unreleased
+
+- [BREAKING] Removed private note support. `/get_tokens` now only creates public notes: `is_private_note` is optional and rejected when set, and the `/get_note` and `/send_note` endpoints were removed along with the `--note-transport-url` flag, the `MIDEN_FAUCET_NOTE_TRANSPORT_URL` env var and the `note_transport_url` field of `/get_metadata`.
 
 ## 0.16.0 (2026-09-08)
 

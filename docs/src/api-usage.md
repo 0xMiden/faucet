@@ -65,7 +65,6 @@ while (true) {
 ```typescript
 const params = new URLSearchParams({
     account_id: accountId,
-    is_private_note: 'true',
     asset_amount: '100',
     challenge: challenge,
     nonce: nonce.toString()
@@ -81,22 +80,6 @@ const txId = json.tx_id;
 const explorerUrl = json.explorer_url;
 ```
 
-4. **Requesting note** to download generated notes
-
-You must complete this step to retrieve private notes. For public notes, normal client sync is sufficient.
-
-```typescript
-const response = await fetch(`${baseUrl}/get_note?note_id=${noteId}`);
-if (!response.ok) throw new Error(`Get note error: ${response.status} ${await response.text()}`);
-
-const text = await response.text();
-const json = JSON.parse(text);
-
-// Decode note with base64
-const noteData = Buffer.from(json.data_base64, 'base64');
-
-fs.writeFileSync('note.mno', noteData);
-```
 
 ## Examples
 

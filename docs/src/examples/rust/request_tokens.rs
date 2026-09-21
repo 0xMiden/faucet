@@ -1,5 +1,3 @@
-use base64::Engine;
-use base64::engine::general_purpose;
 use sha2::{Digest, Sha256};
 
 async fn request_challenge(
@@ -42,11 +40,9 @@ async fn request_tokens(
     challenge: &str,
     nonce: u64,
     asset_amount: u64,
-    is_private_note: bool,
 ) -> anyhow::Result<serde_json::Value> {
     let params = [
         ("account_id", account_address),
-        ("is_private_note", if is_private_note { "true" } else { "false" }),
         ("asset_amount", &asset_amount.to_string()),
         ("challenge", challenge),
         ("nonce", &nonce.to_string()),
@@ -62,24 +58,11 @@ async fn request_tokens(
     Ok(json)
 }
 
-async fn request_note(base_url: &str, note_id: &str) -> anyhow::Result<Vec<u8>> {
-    let url = format!("{base_url}/get_note?note_id={note_id}");
-    let response = reqwest::get(&url).await?.error_for_status()?;
-    let text = response.text().await?;
-    let json: serde_json::Value = serde_json::from_str(&text)?;
-    // Decode base64
-    let decoded_bytes =
-        general_purpose::STANDARD.decode(json["data_base64"].as_str().unwrap()).unwrap();
-
-    Ok(decoded_bytes)
-}
-
 #[tokio::main]
 async fn main() {
     // This example assumes you have the faucet running on http://localhost:8000
     let account_address = "0xca8203e8e58cf72049b061afca78ce";
     let asset_amount = 100;
-    let is_private_note = true;
     let url = "http://localhost:8000";
 
     // Step 1: request challenge
@@ -91,16 +74,10 @@ async fn main() {
     let nonce = solve_challenge(challenge, target);
 
     // Step 3: request tokens
-    let result =
-        request_tokens(url, account_address, challenge, nonce, asset_amount, is_private_note)
-            .await
-            .unwrap();
+    let result = request_tokens(url, account_address, challenge, nonce, asset_amount)
+        .await
+        .unwrap();
     println!("Token minted successfully:");
     println!("* Transaction ID: {}", result["tx_id"]);
     println!("* Note ID: {}", result["note_id"]);
-
-    // Step 4: request note - only necessary for private notes
-    let note_data = request_note(url, result["note_id"].as_str().unwrap()).await.unwrap();
-    std::fs::write("note.mno", &note_data).unwrap();
-    println!("Note saved to note.mno");
 }

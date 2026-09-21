@@ -4,7 +4,7 @@ use miden_client::transaction::TransactionId;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot};
 
-use crate::types::{AssetAmount, NoteType};
+use crate::types::AssetAmount;
 
 pub type MintResponseSender = oneshot::Sender<Result<MintResponse, MintError>>;
 pub type MintRequestSender = mpsc::Sender<(MintRequest, MintResponseSender)>;
@@ -30,7 +30,9 @@ pub struct PowQueryParams {
 pub struct GetTokensQueryParams {
     pub account_id: String,
     pub asset_amount: u64,
-    pub is_private_note: bool,
+    /// Only public notes are supported. The faucet rejects the request when this is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_private_note: Option<bool>,
     pub challenge: String,
     pub nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -59,8 +61,6 @@ pub struct GetTokensResponse {
 pub struct MintRequest {
     /// Destination account.
     pub account_id: AccountId,
-    /// Whether to generate a public or private note to hold the minted asset.
-    pub note_type: NoteType,
     /// The amount to mint.
     pub asset_amount: AssetAmount,
 }

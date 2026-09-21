@@ -104,7 +104,7 @@ async fn mint_command_requests_public_note() {
     let tokens_params = recorded.tokens_params.expect("tokens_params should be recorded");
     assert_eq!(tokens_params.account_id, account_id.to_hex());
     assert_eq!(tokens_params.asset_amount, expected_amount);
-    assert!(!tokens_params.is_private_note);
+    assert_eq!(tokens_params.is_private_note, None);
     assert_eq!(tokens_params.api_key.as_deref(), Some("test-key"));
     assert_eq!(tokens_params.challenge, app_state.challenge_hex);
 }

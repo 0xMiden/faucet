@@ -1,7 +1,7 @@
 use std::cmp::Reverse;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -92,8 +92,6 @@ use crate::types::AssetAmount;
 pub(crate) const COMPONENT: &str = "miden-faucet-client";
 
 const KEYSTORE_PATH: &str = "keystore";
-/// How long a P2ID note is kept in the cache, in blocks, before it is pruned.
-const NOTE_RETENTION_BLOCKS: u32 = 100;
 
 /// How many blocks the transaction that sends the MINT note stays valid after its reference block.
 const MINT_TX_EXPIRATION_DELTA: u16 = 10;
@@ -139,23 +137,6 @@ impl FaucetId {
     }
 }
 
-/// In-memory cache of the P2ID notes the network will mint from the faucet's MINT notes, keyed by
-/// the hex note id.
-///
-/// The faucet's own transaction only creates MINT notes, so the resulting P2ID notes never land in
-/// the client store. They are reconstructed at mint time and kept here so `get_note` can serve
-/// them.
-pub type P2idNoteCache = Arc<RwLock<HashMap<String, CachedP2idNote>>>;
-
-/// A cached P2ID note together with a lower bound on where it can appear on chain.
-#[derive(Clone)]
-pub struct CachedP2idNote {
-    /// The note the network will mint from the corresponding MINT note.
-    pub note: Note,
-    /// The chain tip when the MINT note was submitted.
-    pub after_block_num: BlockNumber,
-}
-
 /// Stores the current faucet state and handles minting requests.
 pub struct Faucet {
     id: FaucetId,
@@ -164,7 +145,6 @@ pub struct Faucet {
     tx_prover: Arc<dyn TransactionProver>,
     issuance: watch::Sender<AssetAmount>,
     max_supply: AssetAmount,
-    p2id_notes: P2idNoteCache,
     operator_account_id: AccountId,
     /// Whether there is an in-flight P2ID note to fund the operator account.
     funding_request_in_flight: bool,
@@ -428,7 +408,6 @@ impl Faucet {
             tx_prover,
             issuance,
             max_supply,
-            p2id_notes: P2idNoteCache::default(),
             funding_request_in_flight: false,
             operator_account_id,
         })
@@ -643,20 +622,6 @@ impl Faucet {
             "Submitted MINT notes; the network mints the P2ID notes in a later transaction",
         );
 
-        // The faucet's transaction only creates the MINT notes; the P2ID notes are minted later by
-        // the network, so they never land in the client store.
-        // They are cached here for `get_note` to serve.
-        {
-            let mut cache = self.p2id_notes.write().expect("p2id note cache is poisoned");
-            prune_stale_p2id_notes(&mut cache, after_block_num);
-            // Only private notes are cached
-            let private_notes = p2id_notes
-                .into_iter()
-                .filter(|note| matches!(note.metadata().note_type(), ProtocolNoteType::Private));
-            for note in private_notes {
-                cache.insert(note.id().to_hex(), CachedP2idNote { note, after_block_num });
-            }
-        }
         // Refresh the issuance cache from the store after submitting the transaction
         self.refresh_issuance().await;
 
@@ -866,20 +831,6 @@ impl Faucet {
     }
 
     /// Returns a handle to the cache of P2ID notes minted through this faucet's MINT notes.
-    pub fn p2id_notes(&self) -> P2idNoteCache {
-        self.p2id_notes.clone()
-    }
-
-    /// Returns the cached P2ID note, if it exists. Otherwise returns `None`.
-    pub fn get_p2id_note(&self, note_id: NoteId) -> Option<CachedP2idNote> {
-        self.p2id_notes
-            .read()
-            .expect("p2id note cache is poisoned")
-            .get(&note_id.to_hex())
-            .cloned()
-    }
-
-    /// Returns the id of the operator account that submits the MINT notes.
     pub fn operator_id(&self) -> AccountId {
         self.operator_account_id
     }
@@ -1179,20 +1130,10 @@ fn log_built_requests(requests: &[MintRequest], mint_notes: &[Note], p2id_notes:
                 mint_note.id = %mint_note.id().to_hex(),
                 p2id_note.id = %p2id_note.id().to_hex(),
                 target_account.id = %request.account_id,
-                note.type = ?request.note_type
             },
             "Built mint request",
         );
     }
-}
-
-/// Removes cached P2ID notes older than [`NOTE_RETENTION_BLOCKS`], keeping the cache bounded.
-///
-/// `current_block` is the chain tip. A note's `after_block_num` is the tip when it was cached, so
-/// it works as the note's age.
-fn prune_stale_p2id_notes(cache: &mut HashMap<String, CachedP2idNote>, current_block: BlockNumber) {
-    let threshold = current_block.saturating_sub(NOTE_RETENTION_BLOCKS);
-    cache.retain(|_, cached| cached.after_block_num >= threshold);
 }
 
 /// Checks that `operator_account_id` is the owner of `faucet_account`.
@@ -1251,7 +1192,7 @@ fn build_p2id_notes(
                 .sender(source.account_id)
                 .target(request.account_id)
                 .asset(asset)
-                .note_type(request.note_type.into())
+                .note_type(ProtocolNoteType::Public)
                 .generate_serial_number(rng)
                 .build()
         .inspect_err(
@@ -1275,14 +1216,7 @@ fn build_mint_notes(
         // SAFETY: `build_p2id_notes` builds these with exactly one fungible asset.
         let asset = p2id_note.assets().iter().next().unwrap().unwrap_fungible();
 
-        let storage = match p2id_note.metadata().note_type() {
-            ProtocolNoteType::Public => {
-                MintNoteStorage::new_fungible_public(recipient, asset, tag)?
-            },
-            ProtocolNoteType::Private => {
-                MintNoteStorage::new_fungible_private(recipient.digest(), asset, tag)
-            },
-        };
+        let storage = MintNoteStorage::new_fungible_public(recipient, asset, tag)?;
         // SAFETY: `faucet_id` is a public (network) account
         let attachment = NetworkAccountTarget::new(faucet_id, NoteExecutionHint::Always)
             .expect("faucet account type should be public");
@@ -1439,53 +1373,6 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::types::NoteType;
-
-    /// Only notes older than the retention window are pruned, and the boundary itself is kept.
-    #[test]
-    fn prunes_only_notes_past_the_retention_window() {
-        let current_block = BlockNumber::from(NOTE_RETENTION_BLOCKS + 10);
-        let note = p2id_note();
-
-        // One note per age: too old, exactly at the oldest kept block, and current.
-        let mut cache = HashMap::new();
-        for after_block_num in [
-            BlockNumber::from(9),
-            current_block.saturating_sub(NOTE_RETENTION_BLOCKS),
-            current_block,
-        ] {
-            cache.insert(
-                after_block_num.as_u32().to_string(),
-                CachedP2idNote { note: note.clone(), after_block_num },
-            );
-        }
-
-        prune_stale_p2id_notes(&mut cache, current_block);
-
-        assert!(!cache.contains_key("9"), "a note past the window should be pruned");
-        assert!(
-            cache.contains_key("10"),
-            "a note exactly at the oldest kept block should be kept"
-        );
-        assert!(cache.contains_key(&current_block.as_u32().to_string()));
-    }
-
-    /// Pruning from a chain younger than the retention window must not underflow.
-    #[test]
-    fn prunes_nothing_before_the_window_has_elapsed() {
-        let note = p2id_note();
-        let mut cache = HashMap::from([(
-            "genesis".to_owned(),
-            CachedP2idNote {
-                note,
-                after_block_num: BlockNumber::GENESIS,
-            },
-        )]);
-
-        prune_stale_p2id_notes(&mut cache, BlockNumber::from(5));
-
-        assert_eq!(cache.len(), 1, "nothing is old enough to prune yet");
-    }
 
     #[tokio::test]
     async fn batch_requests() {
@@ -1493,16 +1380,11 @@ mod tests {
 
         let (tx_mint_requests, rx_mint_requests) = mpsc::channel(1000);
         let mut receivers = vec![];
-        for i in 0..batch_size {
+        for _ in 0..batch_size {
             let (sender, receiver) = oneshot::channel();
             let mint_request = MintRequest {
                 account_id: AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE)
                     .unwrap(),
-                note_type: if i % 2 == 0 {
-                    NoteType::Public
-                } else {
-                    NoteType::Private
-                },
                 asset_amount: AssetAmount::new(100_000_000).unwrap(),
             };
             tx_mint_requests.send((mint_request, sender)).await.unwrap();
@@ -1519,16 +1401,9 @@ mod tests {
         let mut faucet = build_faucet(store.clone()).await;
         faucet.run(rx_mint_requests, batch_size).await.unwrap();
 
-        // Requests alternate public/private, and `receivers` preserves that order. Only the private
-        // notes are cached; a public note's details are on chain, so the faucet needn't keep them.
-        for (i, receiver) in receivers.into_iter().enumerate() {
-            let response = receiver.await.unwrap().unwrap();
-            let cached = faucet.get_p2id_note(response.note_id);
-            if i % 2 == 0 {
-                assert!(cached.is_none(), "public note {i} should not be cached");
-            } else {
-                assert!(cached.is_some(), "private note {i} should be cached");
-            }
+        // Every request in the batch is answered with the note the faucet built for it.
+        for receiver in receivers {
+            receiver.await.unwrap().unwrap();
         }
     }
 
@@ -1752,7 +1627,6 @@ mod tests {
         MintRequest {
             account_id: AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE)
                 .unwrap(),
-            note_type: NoteType::Public,
             asset_amount: AssetAmount::new(100_000_000).unwrap(),
         }
     }
@@ -1902,7 +1776,6 @@ mod tests {
             issuance,
             max_supply: AssetAmount::new(TEST_MAX_SUPPLY).unwrap(),
             operator_account_id: operator_account.id(),
-            p2id_notes: P2idNoteCache::default(),
             funding_request_in_flight: false,
         };
         (faucet, mock_rpc)
@@ -1972,18 +1845,5 @@ mod tests {
     async fn operator_fee_balance(faucet: &Faucet, fee_parameters: &FeeParameters) -> u64 {
         let operator = faucet.client.account_reader(faucet.operator_id());
         fee_asset_balance(&operator, fee_parameters).await.unwrap()
-    }
-
-    /// Builds an arbitrary P2ID note; only its presence matters to the pruning tests.
-    fn p2id_note() -> Note {
-        let target = AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE).unwrap();
-        P2idNote::builder()
-            .sender(target)
-            .target(target)
-            .asset(FungibleAsset::new(target, 1).unwrap())
-            .serial_number(Word::empty())
-            .build()
-            .unwrap()
-            .into()
     }
 }
