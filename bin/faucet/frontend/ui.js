@@ -4,8 +4,13 @@ export class UIController {
     constructor() {
         this.recipientInput = document.getElementById('recipient-address');
         this.tokenSelect = document.getElementById('token-amount');
-        this.privateButton = document.getElementById('send-private-button');
-        this.publicButton = document.getElementById('send-public-button');
+        this.stage = document.getElementById('stage');
+        this.publicTab = document.getElementById('tab-public');
+        this.privateTab = document.getElementById('tab-private');
+        this.noteTypeNote = document.getElementById('note-type-note');
+        this.sendButton = document.getElementById('send-button');
+        this.sendButtonLabel = document.getElementById('send-button-label');
+        this.isPrivateNote = true;
         this.walletConnectButton = document.getElementById('wallet-connect-button');
         this.faucetAddress = document.getElementById('faucet-address');
         this.faucetAddressLoader = document.getElementById('faucet-address-loader');
@@ -19,10 +24,30 @@ export class UIController {
     }
 
     setupEventListeners(onSendTokens, onWalletConnect, onTokenSelect) {
-        this.privateButton.addEventListener('click', () => onSendTokens(true));
-        this.publicButton.addEventListener('click', () => onSendTokens(false));
+        this.publicTab.addEventListener('click', () => this.setNoteType(false));
+        this.privateTab.addEventListener('click', () => this.setNoteType(true));
+        this.sendButton.addEventListener('click', () => onSendTokens(this.isPrivateNote));
         this.walletConnectButton.addEventListener('click', onWalletConnect);
         this.tokenSelect.addEventListener('change', (event) => onTokenSelect(event.target.value));
+        this.recipientInput.addEventListener('input', () => this.syncSendButton());
+        this.syncSendButton();
+    }
+
+    // The send button stays inactive until the recipient field holds a valid address.
+    syncSendButton() {
+        this.sendButton.disabled = !Utils.validateAddress(this.recipientInput.value.trim());
+    }
+
+    // Switches the public / private toggle. The send button label and the note under the toggle follow it.
+    setNoteType(isPrivateNote) {
+        this.isPrivateNote = isPrivateNote;
+        this.stage.dataset.noteType = isPrivateNote ? 'private' : 'public';
+        this.publicTab.setAttribute('aria-selected', String(!isPrivateNote));
+        this.privateTab.setAttribute('aria-selected', String(isPrivateNote));
+        this.sendButtonLabel.textContent = isPrivateNote ? 'Send private note' : 'Send public note';
+        this.noteTypeNote.textContent = isPrivateNote
+            ? 'Private note data is not visible on-chain.'
+            : 'The note and its amount are visible to anyone on-chain.';
     }
 
     getFormData() {
@@ -37,6 +62,7 @@ export class UIController {
         this.recipientInput.value = address;
         this.recipientInput.disabled = true;
         this.walletConnectButton.disabled = true;
+        this.syncSendButton();
     }
 
     setWalletButtonEnabled(enabled) {
@@ -48,6 +74,7 @@ export class UIController {
         if (!this.recipientInput.disabled) {
             this.recipientInput.value = '';
         }
+        this.syncSendButton();
     }
 
     hideModals() {
@@ -326,7 +353,7 @@ export class UIController {
     setIssuanceAndSupply(issuance, max_supply, decimals) {
         this.issuance.textContent = Utils.baseUnitsToTokens(issuance, decimals);
         this.tokensSupply.textContent = Utils.baseUnitsToTokens(max_supply, decimals);
-        this.issuanceFill.style.width = (issuance / max_supply) * 100 + '%';
+        this.issuanceFill.style.setProperty('--issuance', (issuance / max_supply) * 100);
         this.issuanceLoader.hidden = true;
         this.issuanceValues.hidden = false;
     }
