@@ -30,9 +30,6 @@ pub struct PowQueryParams {
 pub struct GetTokensQueryParams {
     pub account_id: String,
     pub asset_amount: u64,
-    /// Only public notes are supported. The faucet rejects the request when this is set.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub is_private_note: Option<bool>,
     pub challenge: String,
     pub nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]

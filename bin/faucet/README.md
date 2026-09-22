@@ -18,7 +18,6 @@ This crate contains a binary CLI that allows to run the faucet behind a REST API
 - **Purpose**: Request tokens
 - **Query Parameters**:
   - `account_id` (string, required): The account ID requesting tokens
-  - `is_private_note` (boolean, required): Whether to create a private note
   - `asset_amount` (number, required): Requested asset amount (in base units)
   - `challenge` (string, required): The encoded challenge from the `/pow` endpoint
   - `nonce` (number, required): The nonce used to solve the challenge
@@ -26,14 +25,6 @@ This crate contains a binary CLI that allows to run the faucet behind a REST API
 - **Response**: JSON object containing:
   - `tx_id` (string): ID of the created transaction
   - `note_id` (string): ID of the created note
-
-**GET /get_note**
-- **Purpose**: Request a specific note by its ID
-- **Query Parameters**:
-  - `note_id` (string, required): The ID of the note to retrieve
-- **Response**: JSON object containing:
-  - `note_id` (string): The ID of the requested note
-  - `data_base64` (string): The note data encoded in base64 format. This data should be decoded and saved as a file with `.mno` extension and `application/octet-stream` media type
 
 See more detail in the [API Documentation](../../docs/src/rest-api.md).
 

@@ -95,8 +95,6 @@ pub enum MintRequestError {
     PowError(#[from] ChallengeError),
     #[error("API key {0} is invalid")]
     InvalidApiKey(String),
-    #[error("private notes are not supported")]
-    PrivateNoteUnsupported,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -189,7 +187,6 @@ impl IntoResponse for GetTokenError {
 /// # Errors
 ///
 /// Returns an error if:
-///   - a private note was requested
 ///   - the account ID is not a valid hex string
 ///   - the asset amount is not one of the provided options
 ///   - the API key is invalid
@@ -201,10 +198,6 @@ fn validate_get_tokens_params(
     params: &GetTokensQueryParams,
     server: &ApiServer,
 ) -> Result<MintRequest, MintRequestError> {
-    if params.is_private_note == Some(true) {
-        return Err(MintRequestError::PrivateNoteUnsupported);
-    }
-
     let account_id = if params.account_id.starts_with("0x") {
         AccountId::from_hex(&params.account_id).map_err(AccountError::ParseId)
     } else {
