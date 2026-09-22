@@ -43,20 +43,6 @@ pub async fn get_tokens(
     }))
 }
 
-// STATE
-// ================================================================================================
-
-#[derive(Clone)]
-pub struct GetTokensState {
-    pub max_claimable_amount: AssetAmount,
-}
-
-impl GetTokensState {
-    pub fn new(max_claimable_amount: AssetAmount) -> Self {
-        Self { max_claimable_amount }
-    }
-}
-
 // REQUEST VALIDATION
 // ================================================================================================
 
@@ -169,11 +155,8 @@ fn validate_get_tokens_params(
 
     let asset_amount =
         AssetAmount::new(params.asset_amount).map_err(MintRequestError::InvalidAssetAmount)?;
-    if asset_amount > server.mint_state.max_claimable_amount {
-        return Err(MintRequestError::AssetAmountTooBig(
-            asset_amount,
-            server.mint_state.max_claimable_amount,
-        ));
+    if asset_amount > server.max_claimable_amount {
+        return Err(MintRequestError::AssetAmountTooBig(asset_amount, server.max_claimable_amount));
     }
 
     // Check the API key, if provided

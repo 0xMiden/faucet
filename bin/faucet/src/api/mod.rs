@@ -20,7 +20,7 @@ use url::Url;
 use crate::COMPONENT;
 use crate::api::get_metadata::get_metadata;
 use crate::api::get_pow::get_pow;
-use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
+use crate::api::get_tokens::{MintRequestError, get_tokens};
 use crate::api_key::ApiKey;
 use crate::funding_service_client::FundingServiceClient;
 
@@ -37,7 +37,7 @@ pub use get_metadata::Metadata;
 #[derive(Clone)]
 pub struct ApiServer {
     funding_service: FundingServiceClient,
-    mint_state: GetTokensState,
+    max_claimable_amount: AssetAmount,
     metadata: Metadata,
     rate_limiter: PoWRateLimiter,
     api_keys: HashSet<ApiKey>,
@@ -52,13 +52,11 @@ impl ApiServer {
         rate_limiter_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],
     ) -> Self {
-        let mint_state = GetTokensState::new(max_claimable_amount);
-
         let rate_limiter = PoWRateLimiter::new_with_cleanup(pow_secret, rate_limiter_config);
 
         ApiServer {
             funding_service,
-            mint_state,
+            max_claimable_amount,
             metadata,
             rate_limiter,
             api_keys: api_keys.iter().cloned().collect::<HashSet<_>>(),
@@ -144,12 +142,6 @@ impl ApiServer {
 impl FromRef<ApiServer> for Metadata {
     fn from_ref(input: &ApiServer) -> Self {
         input.metadata.clone()
-    }
-}
-
-impl FromRef<ApiServer> for GetTokensState {
-    fn from_ref(input: &ApiServer) -> Self {
-        input.mint_state.clone()
     }
 }
 
