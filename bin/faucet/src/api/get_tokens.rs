@@ -31,15 +31,15 @@ pub async fn get_tokens(
     let validated_request =
         validate_get_tokens_params(&request, &server).map_err(GetTokenError::InvalidRequest)?;
 
-    let funded = server
-        .funding
+    let funding_response = server
+        .funding_service
         .request_funds(validated_request.account_id, validated_request.asset_amount.base_units())
         .await
-        .map_err(GetTokenError::Funding)?;
+        .map_err(GetTokenError::FundingServiceError)?;
 
     Ok(Json(GetTokensResponse {
-        tx_id: funded.transaction_id.to_hex(),
-        note_id: funded.note.id().to_hex(),
+        tx_id: funding_response.transaction_id.to_hex(),
+        note_id: funding_response.note.id().to_hex(),
     }))
 }
 
@@ -79,7 +79,7 @@ pub enum GetTokenError {
     #[error("invalid request: {0}")]
     InvalidRequest(#[source] MintRequestError),
     #[error(transparent)]
-    Funding(FundingServiceError),
+    FundingServiceError(FundingServiceError),
 }
 
 impl GetTokenError {
@@ -89,7 +89,7 @@ impl GetTokenError {
                 StatusCode::TOO_MANY_REQUESTS
             },
             Self::InvalidRequest(_) => StatusCode::BAD_REQUEST,
-            Self::Funding(error) => error.status_code(),
+            Self::FundingServiceError(error) => error.status_code(),
         }
     }
 
@@ -103,7 +103,7 @@ impl GetTokenError {
                 "Please enter a valid recipient address.".to_owned()
             },
             Self::InvalidRequest(error) => error.to_string(),
-            Self::Funding(error) => error.user_facing_error(),
+            Self::FundingServiceError(error) => error.user_facing_error(),
         }
     }
 
@@ -111,7 +111,7 @@ impl GetTokenError {
     fn trace(&self) {
         match self {
             Self::InvalidRequest(_) => {},
-            Self::Funding(error) => {
+            Self::FundingServiceError(error) => {
                 tracing::error!(target: COMPONENT, %error, "funding service request failed");
             },
         }

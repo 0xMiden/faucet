@@ -36,7 +36,7 @@ pub use get_metadata::Metadata;
 /// Serves the faucet's API server that handles token requests.
 #[derive(Clone)]
 pub struct ApiServer {
-    funding: FundingServiceClient,
+    funding_service: FundingServiceClient,
     mint_state: GetTokensState,
     metadata: Metadata,
     rate_limiter: PoWRateLimiter,
@@ -47,7 +47,7 @@ impl ApiServer {
     pub fn new(
         metadata: Metadata,
         max_claimable_amount: AssetAmount,
-        funding: FundingServiceClient,
+        funding_service: FundingServiceClient,
         pow_secret: [u8; 32],
         rate_limiter_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],
@@ -57,7 +57,7 @@ impl ApiServer {
         let rate_limiter = PoWRateLimiter::new_with_cleanup(pow_secret, rate_limiter_config);
 
         ApiServer {
-            funding,
+            funding_service,
             mint_state,
             metadata,
             rate_limiter,

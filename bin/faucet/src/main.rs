@@ -404,8 +404,8 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 
             // The funding service is the only source of notes, so the faucet refuses to serve
             // without it. Its status also bounds what the faucet may hand out.
-            let funding = FundingServiceClient::new(funding_service_url.clone(), timeout)?;
-            let funding_status = funding.status().await.with_context(|| {
+            let funding_service = FundingServiceClient::new(funding_service_url.clone(), timeout)?;
+            let funding_status = funding_service.status().await.with_context(|| {
                 format!("failed to reach the funding service at {funding_service_url}")
             })?;
 
@@ -456,7 +456,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let api_server = ApiServer::new(
                 metadata,
                 max_claimable_amount,
-                funding,
+                funding_service,
                 pow_secret,
                 rate_limiter_config,
                 &api_keys,
@@ -593,6 +593,21 @@ mod tests {
         assert!(error.to_string().contains("--funding-service-url"));
     }
 
+    /// The token's decimals no longer come from a faucet account, so they must be configured.
+    #[test]
+    fn start_requires_the_token_decimals() {
+        let Err(error) = Cli::try_parse_from([
+            "miden-faucet",
+            "start",
+            "--funding-service-url",
+            "http://localhost:50401",
+        ]) else {
+            panic!("--decimals should be required")
+        };
+        assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
+        assert!(error.to_string().contains("--decimals"));
+    }
+
     // FUNDING SERVICE TESTS
     // ---------------------------------------------------------------------------------------------
 
@@ -603,16 +618,25 @@ mod tests {
         let url = Url::from_str(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
         tokio::spawn(async move { serve_stub_funding_service(listener).await.unwrap() });
 
-        let funding = FundingServiceClient::new(url, Duration::from_secs(5)).unwrap();
+        let funding_service = FundingServiceClient::new(url, Duration::from_secs(5)).unwrap();
 
-        let status = funding.status().await.expect("the stub serves a status");
+        let status = funding_service.status().await.expect("the stub serves a status");
         assert_eq!(status.max_amount, STUB_MAX_AMOUNT);
 
         let target = AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE).unwrap();
-        let funded = funding.request_funds(target, 1_000).await.expect("the stub funds it");
+        let funding_response =
+            funding_service.request_funds(target, 1_000).await.expect("the stub funds it");
 
         assert_eq!(
-            funded.note.assets().iter().next().unwrap().unwrap_fungible().amount().as_u64(),
+            funding_response
+                .note
+                .assets()
+                .iter()
+                .next()
+                .unwrap()
+                .unwrap_fungible()
+                .amount()
+                .as_u64(),
             1_000
         );
     }

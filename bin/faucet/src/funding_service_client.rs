@@ -72,7 +72,7 @@ impl FundingServiceClient {
         &self,
         account_id: AccountId,
         amount: u64,
-    ) -> Result<FundedNote, FundingServiceError> {
+    ) -> Result<RequestFundsResponse, FundingServiceError> {
         let url = self.endpoint("request-funds")?;
         let response = self
             .client
@@ -83,12 +83,7 @@ impl FundingServiceClient {
             .await
             .map_err(FundingServiceError::from_transport)?;
 
-        let funded: RequestFundsResponse = Self::parse(response).await?;
-
-        Ok(FundedNote {
-            note: decode(&funded.note)?,
-            transaction_id: decode(&funded.transaction_id)?,
-        })
+        Self::parse(response).await
     }
 
     /// Appends `path` to the service's base URL.
@@ -119,19 +114,6 @@ impl FundingServiceClient {
     }
 }
 
-/// A committed P2ID note created by the funding service.
-pub struct FundedNote {
-    pub note: Note,
-    /// The transaction which created the note.
-    pub transaction_id: TransactionId,
-}
-
-/// Deserializes one of the funding service's hexadecimal fields.
-fn decode<T: Deserializable>(hex: &str) -> Result<T, FundingServiceError> {
-    let bytes = hex::decode(hex).map_err(|_| FundingServiceError::MalformedResponse)?;
-    T::read_from_bytes(&bytes).map_err(|_| FundingServiceError::MalformedResponse)
-}
-
 // RESPONSES
 // ================================================================================================
 
@@ -151,10 +133,25 @@ pub struct FundingStatus {
     pub verification_base_fee: u32,
 }
 
+/// The funding service's `/request-funds` response: a committed P2ID note and the transaction
+/// which created it. The service sends both as hexadecimal of their serialized form.
 #[derive(Debug, Deserialize)]
-struct RequestFundsResponse {
-    note: String,
-    transaction_id: String,
+pub struct RequestFundsResponse {
+    #[serde(deserialize_with = "deserialize_hex")]
+    pub note: Note,
+    #[serde(deserialize_with = "deserialize_hex")]
+    pub transaction_id: TransactionId,
+}
+
+/// Deserializes one of the funding service's hexadecimal fields into its domain type.
+fn deserialize_hex<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserializable,
+{
+    let hex = String::deserialize(deserializer)?;
+    let bytes = hex::decode(&hex).map_err(serde::de::Error::custom)?;
+    T::read_from_bytes(&bytes).map_err(serde::de::Error::custom)
 }
 
 #[derive(Debug, Deserialize)]
