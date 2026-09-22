@@ -716,7 +716,6 @@ mod tests {
         );
     }
 
-    /// `start` reaches the funding service first, then fails on the uninitialised store.
     // API KEY TESTS
     // ---------------------------------------------------------------------------------------------
 
