@@ -25,9 +25,8 @@ use crate::COMPONENT;
 ///
 /// The funding service answers only once the note is committed, which takes at least one block
 /// interval, so the node timeout does not apply here. The service's own HTTP timeout is 5 minutes,
-/// past which it answers 408; the faucet waits a little longer so that the service reports the
-/// timeout itself.
-const REQUEST_FUNDS_TIMEOUT: Duration = Duration::from_secs(310);
+/// past which it answers 408; the faucet waits up to 1 minute.
+const REQUEST_FUNDS_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Client for the funding service's JSON HTTP API.
 #[derive(Clone)]
@@ -49,7 +48,7 @@ impl FundingServiceClient {
     }
 
     /// Reads the funding service's status.
-    pub async fn status(&self) -> Result<FundingStatus, FundingServiceError> {
+    pub async fn status(&self) -> Result<FundingServiceStatus, FundingServiceError> {
         let response = self
             .client
             .get(self.endpoint("status"))
@@ -97,8 +96,6 @@ impl FundingServiceClient {
             return response.json().await.map_err(|_| FundingServiceError::MalformedResponse);
         }
 
-        // The service reports the reason in an `{"error": "..."}` body. A body in any other shape
-        // means we are not talking to a funding service, so the status code carries the meaning.
         let message = response
             .json::<ErrorResponse>()
             .await
@@ -113,7 +110,7 @@ impl FundingServiceClient {
 
 /// The funding service's `/status` response.
 #[derive(Debug, Clone, Deserialize)]
-pub struct FundingStatus {
+pub struct FundingServiceStatus {
     pub version: String,
     /// The account which sends the notes, in hexadecimal.
     pub account_id: String,
@@ -154,8 +151,8 @@ struct ErrorResponse {
 
 #[derive(Debug, thiserror::Error)]
 pub enum FundingServiceError {
-    #[error("the funding service could not be reached")]
-    Unreachable(#[source] reqwest::Error),
+    #[error("the funding service could not be reached: {0}")]
+    TransportError(#[source] reqwest::Error),
     #[error("the funding service did not answer in time")]
     TimedOut,
     #[error("the funding service rejected the request: {message}")]
@@ -170,15 +167,11 @@ impl FundingServiceError {
         if error.is_timeout() {
             Self::TimedOut
         } else {
-            Self::Unreachable(error)
+            Self::TransportError(error)
         }
     }
 
     /// The status code the faucet answers its own client with.
-    ///
-    /// The funding service's codes are remapped because the faucet's client cannot act on most of
-    /// them, and because 429 is reserved for the `PoW` rate limiter, which pairs it with a
-    /// `Retry-After` header.
     pub fn status_code(&self) -> StatusCode {
         let Self::Rejected { status, .. } = self else {
             return match self {
