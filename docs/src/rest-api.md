@@ -54,8 +54,6 @@ For detailed information about the token request flow, see the [Architecture](./
   - `tx_id` (string): ID of the created transaction
   - `note_id` (string): ID of the created note
 
-  Only public notes are created.
-
 ### Get Metadata
 
 **Endpoint**: `GET /get_metadata`

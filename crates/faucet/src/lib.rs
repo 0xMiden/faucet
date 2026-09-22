@@ -830,7 +830,7 @@ impl Faucet {
         self.issuance.subscribe()
     }
 
-    /// Returns a handle to the cache of P2ID notes minted through this faucet's MINT notes.
+    /// Returns the id of the operator account that submits the MINT notes.
     pub fn operator_id(&self) -> AccountId {
         self.operator_account_id
     }
