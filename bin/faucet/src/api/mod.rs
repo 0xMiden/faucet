@@ -11,7 +11,6 @@ use miden_client::utils::hex_to_bytes;
 use miden_faucet_lib::types::AssetAmount;
 use miden_pow_rate_limiter::{Challenge, ChallengeError, PoWRateLimiter, PoWRateLimiterConfig};
 use tokio::net::TcpListener;
-use tokio::sync::watch;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -19,14 +18,12 @@ use tracing::instrument;
 use url::Url;
 
 use crate::COMPONENT;
-use crate::api::events::issuance_stream;
 use crate::api::get_metadata::get_metadata;
 use crate::api::get_pow::get_pow;
 use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
 use crate::api_key::ApiKey;
 use crate::funding_service_client::FundingServiceClient;
 
-mod events;
 mod get_metadata;
 mod get_pow;
 mod get_tokens;
@@ -42,7 +39,6 @@ pub struct ApiServer {
     funding: FundingServiceClient,
     mint_state: GetTokensState,
     metadata: Metadata,
-    issuance_receiver: watch::Receiver<AssetAmount>,
     rate_limiter: PoWRateLimiter,
     api_keys: HashSet<ApiKey>,
 }
@@ -55,7 +51,6 @@ impl ApiServer {
         pow_secret: [u8; 32],
         rate_limiter_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],
-        issuance_receiver: watch::Receiver<AssetAmount>,
     ) -> Self {
         let mint_state = GetTokensState::new(max_claimable_amount);
 
@@ -65,7 +60,6 @@ impl ApiServer {
             funding,
             mint_state,
             metadata,
-            issuance_receiver,
             rate_limiter,
             api_keys: api_keys.iter().cloned().collect::<HashSet<_>>(),
         }
@@ -75,7 +69,6 @@ impl ApiServer {
     pub async fn serve(self, url: Url) -> anyhow::Result<()> {
         let app = Router::new()
             .route("/get_metadata", get(get_metadata))
-            .route("/issuance", get(issuance_stream))
             .route("/pow", get(get_pow))
             .route("/get_tokens", get(get_tokens))
             .layer(

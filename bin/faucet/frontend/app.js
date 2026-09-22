@@ -13,7 +13,6 @@ export class MidenFaucetApp {
         this.ui = new UIController();
         this.tokenAmountOptions = [100, 500, 1000];
         this.metadataInitialized = false;
-        this.issuance = null;
         this.apiUrl = null;
         this.nodeUrl = null;
         this.rpcClient = null;
@@ -161,40 +160,14 @@ export class MidenFaucetApp {
             this.ui.showConnectionError('Connection failed', 'Some data couldn\'t be loaded right now.');
             console.error('Error fetching metadata:', error);
         });
-
-        this.connectSSE();
-    }
-
-    connectSSE() {
-        const source = new EventSource(this.apiUrl + '/issuance');
-
-        // The server pushes the current issuance immediately on connection,
-        // usually before the metadata fetch resolves. Cache the value so it
-        // can be rendered as soon as the metadata is available too.
-        source.addEventListener('issuance', (event) => {
-            this.issuance = Number(event.data);
-            this.renderIssuance();
-        });
-
-        source.onerror = () => {
-            console.warn('SSE connection lost, reconnecting...');
-        };
-    }
-
-    renderIssuance() {
-        if (this.issuance != null && this.maxSupply != null && this.decimals != null) {
-            this.ui.setIssuanceAndSupply(this.issuance, this.maxSupply, this.decimals);
-        }
     }
 
     async fetchMetadata() {
         const data = await getMetadata(this.apiUrl);
 
-        this.maxSupply = data.max_supply;
         this.decimals = data.decimals;
         this.powLoadDifficulty = data.pow_load_difficulty;
         this.baseAmount = data.base_amount;
-        this.renderIssuance();
 
         if (!this.metadataInitialized) {
             this.metadataInitialized = true;

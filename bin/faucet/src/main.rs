@@ -14,18 +14,16 @@ use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use miden_client::account::component::FungibleFaucet;
 use miden_client::account::{AccountFile, AccountId};
 use miden_client::rpc::Endpoint;
 use miden_client::store::{SettingScope, Store};
 use miden_client_sqlite_store::SqliteStore;
 use miden_faucet_lib::types::AssetAmount;
-use miden_faucet_lib::{Faucet, FaucetAccount, FaucetConfig};
+use miden_faucet_lib::{Faucet, FaucetAccount, FaucetConfig, FaucetId};
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::SeedableRng;
 use rand::rngs::ChaCha20Rng;
 use sha2::{Digest, Sha256};
-use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use url::Url;
 
@@ -39,7 +37,6 @@ use crate::network::FaucetNetwork;
 // CONSTANTS
 // =================================================================================================
 
-pub const REQUESTS_QUEUE_SIZE: usize = 1000;
 const COMPONENT: &str = "miden-faucet-server";
 const DEFAULT_STORE_PATH: &str = "faucet_client_store.sqlite3";
 
@@ -60,9 +57,9 @@ const ENV_POW_BASELINE: &str = "MIDEN_FAUCET_POW_BASELINE";
 const ENV_BASE_AMOUNT: &str = "MIDEN_FAUCET_BASE_AMOUNT";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
+const ENV_DECIMALS: &str = "MIDEN_FAUCET_DECIMALS";
 const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
 const ENV_FUNDING_SERVICE_URL: &str = "MIDEN_FAUCET_FUNDING_SERVICE_URL";
-const ENV_BATCH_SIZE: &str = "MIDEN_FAUCET_BATCH_SIZE";
 const ENV_IMPORT_OPERATOR_ACCOUNT_PATH: &str = "MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH";
 const ENV_FAUCET_ACCOUNT_ID: &str = "MIDEN_FAUCET_FAUCET_ACCOUNT_ID";
 
@@ -122,6 +119,11 @@ pub enum Command {
         /// Base URL of the funding service that emits the notes.
         #[arg(long = "funding-service-url", value_name = "URL", env = ENV_FUNDING_SERVICE_URL)]
         funding_service_url: Url,
+
+        /// Decimals of the token the funding service hands out, used by the frontend to convert
+        /// base units into token amounts.
+        #[arg(long = "decimals", value_name = "U8", env = ENV_DECIMALS)]
+        decimals: u8,
 
         /// Port to bind the API server. The server will be started on `0.0.0.0:<api-bind-port>`.
         #[arg(long = "api-bind-port", value_name = "PORT", env = ENV_API_BIND_PORT, default_value = "8000")]
@@ -195,11 +197,6 @@ pub enum Command {
         /// Explorer URL.
         #[arg(long = "explorer-url", value_name = "URL", env = ENV_EXPLORER_URL)]
         explorer_url: Option<Url>,
-
-        /// The maximum number of requests to process in each batch. Each batch is processed in a
-        /// single transaction.
-        #[arg(long = "batch-size", value_name = "USIZE", default_value = "32", env = ENV_BATCH_SIZE)]
-        batch_size: usize,
     },
 }
 
@@ -393,40 +390,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             base_amount,
             open_telemetry: _,
             explorer_url,
-            batch_size,
+            decimals,
         } => {
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
-            let config = FaucetConfig {
-                store_path: store_path.clone(),
-                node_endpoint: node_endpoint.clone(),
-                network_id: network.to_network_id()?,
-                timeout,
-                remote_tx_prover_url,
-            };
-            let mut faucet = Faucet::load(&config).await.context("failed to load faucet")?;
-            let issuance_receiver = faucet.subscribe_issuance();
-            let fee_parameters = faucet
-                .fee_parameters()
-                .await
-                .context("failed to read the chain's fee parameters")?;
-
-            tracing::info!(
-                target: COMPONENT,
-                {
-                    faucet.account.id = %faucet.faucet_id().account_id,
-                    operator.account.id = %faucet.operator_id(),
-                    node.endpoint = %node_endpoint,
-                    fee.verification_base_fee = fee_parameters.verification_base_fee(),
-                    batch_size
-                },
-                "Faucet loaded",
-            );
+            let _ = remote_tx_prover_url;
 
             let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
-
-            // Maximum of 1000 requests in-queue at once. Overflow is rejected for faster feedback.
-            let (tx_mint_requests, rx_mint_requests) = mpsc::channel(REQUESTS_QUEUE_SIZE);
 
             let api_keys = load_api_keys_from_store(&store)
                 .await
@@ -465,14 +435,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 growth_rate: pow_growth_rate,
                 baseline: pow_baseline,
             };
-            let faucet_account = faucet.faucet_account().await.map_err(|error| *error)?;
-            let token_metadata = FungibleFaucet::try_from(faucet_account.storage())?;
-            let max_supply = AssetAmount::new(token_metadata.max_supply().as_u64())?;
-            let decimals = token_metadata.decimals();
+            // The funding account is what the notes are sent from, so its address is the one the
+            // frontend shows.
+            let (funding_account_id, _) = AccountId::parse(&funding_status.account_id)
+                .context("the funding service reported an unparsable account ID")?;
 
             let metadata = Metadata {
-                id: faucet.faucet_id(),
-                max_supply,
+                id: FaucetId::new(funding_account_id, network.to_network_id()?),
                 decimals,
                 explorer_url,
                 base_amount,
@@ -484,9 +453,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 None => rand::random(),
             };
 
-            // Requests now go to the funding service, but the sender is kept alive so the idle
-            // mint worker does not see a closed channel and shut the faucet down.
-            let _tx_mint_requests = tx_mint_requests;
             let api_server = ApiServer::new(
                 metadata,
                 max_claimable_amount,
@@ -494,15 +460,10 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 pow_secret,
                 rate_limiter_config,
                 &api_keys,
-                issuance_receiver,
             );
 
-            // Use select to concurrently:
-            // - Run and wait for the faucet (on current thread)
-            // - Run and wait for API server (in a spawned task)
-            // - Run and wait for frontend server (in a spawned task, only if set)
-            let faucet_future = faucet.run(rx_mint_requests, batch_size);
-
+            // Run the API server and, unless disabled, the frontend server, and fail as soon as
+            // either of them stops.
             let mut tasks = JoinSet::new();
             let mut tasks_ids = HashMap::new();
 
@@ -518,21 +479,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 tasks_ids.insert(frontend_id, "frontend");
             }
 
-            tokio::select! {
-                serve_result = tasks.join_next_with_id() => {
-                    let (id, err) = match serve_result.unwrap() {
-                        Ok((id, Ok(_))) => (id, Err(anyhow::anyhow!("completed unexpectedly"))),
-                        Ok((id, Err(err))) => (id, Err(err)),
-                        Err(join_err) => (join_err.id(), Err(join_err).context("failed to join task")),
-                    };
-                    let component = tasks_ids.get(&id).unwrap_or(&"unknown");
-                    err.context(format!("{component} server failed"))
-                },
-                faucet_result = faucet_future => {
-                    // Faucet completed, return its result
-                    faucet_result.context("faucet failed")
-                },
-            }?;
+            let (id, result) = match tasks.join_next_with_id().await.expect("a task was spawned") {
+                Ok((id, Ok(()))) => (id, Err(anyhow::anyhow!("completed unexpectedly"))),
+                Ok((id, Err(err))) => (id, Err(err)),
+                Err(join_err) => (join_err.id(), Err(join_err).context("failed to join task")),
+            };
+            let component = tasks_ids.get(&id).unwrap_or(&"unknown");
+            result.context(format!("{component} server failed"))?;
         },
     }
 
@@ -740,33 +693,6 @@ mod tests {
     }
 
     /// `start` reaches the funding service first, then fails on the uninitialised store.
-    #[tokio::test]
-    async fn serve_fails_without_init() {
-        let stub_node_url = run_stub_node().await;
-        let funding_service_url = run_stub_funding_service().await;
-        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
-
-        let result = Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
-            "start",
-            "--api-bind-port",
-            "8000",
-            "--frontend-bind-port",
-            "8081",
-            "--node-url",
-            stub_node_url.to_string().as_str(),
-            "--funding-service-url",
-            funding_service_url.to_string().as_str(),
-            "--max-claimable-amount",
-            "1000",
-            "--store",
-            store_path.to_str().unwrap(),
-        ])))
-        .await;
-        let error = format!("{:#}", result.expect_err("the store holds no faucet account"));
-        assert!(error.contains("failed to load faucet"), "unexpected failure: {error}");
-    }
-
     // API KEY TESTS
     // ---------------------------------------------------------------------------------------------
 
@@ -859,13 +785,6 @@ mod tests {
 
     // TESTING HELPERS
     // ---------------------------------------------------------------------------------------------
-
-    async fn run_stub_funding_service() -> Url {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let url = Url::from_str(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
-        tokio::spawn(async move { serve_stub_funding_service(listener).await.unwrap() });
-        url
-    }
 
     pub async fn run_stub_node() -> Url {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
