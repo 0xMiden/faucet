@@ -86,14 +86,14 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: clamp(30px, 4.5vw, 50px) 24px 0;
+    padding: clamp(24px, 3vw, 32px) 24px 0;
 }
 
 /* Hero illustration */
 .hero {
     position: relative;
     width: 100%;
-    max-width: 857px;
+    max-width: 720px;
 }
 
 .hero-image {
@@ -108,7 +108,7 @@ body {
 .meta-chips {
     width: 100%;
     margin-top: auto;
-    padding: clamp(40px, 6vw, 64px) 14px 14px;
+    padding: 28px 14px 14px;
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
@@ -169,12 +169,12 @@ body {
 /* Heading */
 .head {
     text-align: center;
-    margin: 0 auto 40px;
+    margin: 0 auto 28px;
 }
 
 .head h1 {
     font-family: "Seasonmix", Georgia, serif;
-    font-size: clamp(30px, 3.9vw, 40px);
+    font-size: clamp(28px, 3.4vw, 34px);
     font-weight: 600;
     color: var(--ink-strong);
     line-height: 1.12;
@@ -198,7 +198,7 @@ body {
 .col {
     width: 100%;
     max-width: var(--column);
-    margin-top: 20px;
+    margin-top: 16px;
 }
 
 .view {
@@ -240,7 +240,7 @@ body {
     font-weight: 600;
     font-size: 16px;
     color: var(--ink-strong);
-    margin: 26px 2px 13px;
+    margin: 20px 2px 10px;
 }
 
 .head + .field-label {
@@ -252,7 +252,7 @@ body {
     display: flex;
     align-items: center;
     gap: 13px;
-    min-height: 68px;
+    min-height: 56px;
     background-color: var(--field);
     border: 1px solid var(--hair);
     border-radius: 12px;
@@ -293,7 +293,7 @@ body {
     font-size: 16px;
     color: var(--ink-strong);
     letter-spacing: -0.2px;
-    padding: 20px 0;
+    padding: 15px 0;
 }
 
 .field-input::placeholder {
@@ -379,7 +379,7 @@ body {
     background-color: var(--field-2);
     border-radius: 12px;
     padding: 5px;
-    margin-top: 26px;
+    margin-top: 20px;
 }
 
 .segmented .thumb {
@@ -408,7 +408,7 @@ body {
     font-weight: 600;
     font-size: 16px;
     color: var(--muted);
-    padding: 15px 8px;
+    padding: 12px 8px;
     border-radius: 12px;
     display: flex;
     align-items: center;
@@ -431,7 +431,7 @@ body {
     font-weight: 400;
     font-size: 14.5px;
     color: var(--muted);
-    margin: 18px auto 0;
+    margin: 14px auto 0;
     max-width: 56ch;
     line-height: 1.5;
 }
@@ -439,7 +439,7 @@ body {
 /* Primary action */
 .cta {
     width: 100%;
-    margin-top: 30px;
+    margin-top: 24px;
     border: none;
     cursor: pointer;
     background-color: var(--orange);
@@ -448,7 +448,7 @@ body {
     font-weight: 600;
     font-size: 17px;
     letter-spacing: 0;
-    padding: 19px;
+    padding: 16px;
     border-radius: 10px;
     display: flex;
     align-items: center;
@@ -787,7 +787,7 @@ body {
 .footer {
     width: 100%;
     background-color: var(--card);
-    padding: 18px clamp(24px, 4vw, 44px) calc(18px + env(safe-area-inset-bottom, 0px));
+    padding: 14px clamp(24px, 4vw, 44px) calc(14px + env(safe-area-inset-bottom, 0px));
     display: flex;
     align-items: center;
     gap: 16px;
