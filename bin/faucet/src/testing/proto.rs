@@ -41,9 +41,8 @@ pub fn to_proto_word(word: Word) -> primitives::Word {
 pub fn to_proto_block_header(header: &BlockHeader) -> blockchain::BlockHeader {
     blockchain::BlockHeader {
         version: i32::from(header.version()),
-        timestamp: header.timestamp(),
-        block_num: Some(blockchain::BlockNumber { block_num: header.block_num().as_u32() }),
         prev_block_commitment: Some(to_proto_word(header.prev_block_commitment())),
+        block_num: Some(blockchain::BlockNumber { block_num: header.block_num().as_u32() }),
         chain_commitment: Some(to_proto_word(header.chain_commitment())),
         account_root: Some(to_proto_word(header.account_root())),
         nullifier_root: Some(to_proto_word(header.nullifier_root())),
@@ -60,6 +59,7 @@ pub fn to_proto_block_header(header: &BlockHeader) -> blockchain::BlockHeader {
                 .collect(),
             quorum: u32::from(header.validator_config().quorum()),
         }),
+        timestamp: header.timestamp(),
         fee_parameters: Some(blockchain::FeeParameters {
             verification_base_fee: header.fee_parameters().verification_base_fee(),
         }),
