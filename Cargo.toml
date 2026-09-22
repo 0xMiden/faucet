@@ -29,6 +29,7 @@ miden-client-sqlite-store = { version = "0.17.0-rc.1" }
 
 # External dependencies
 anyhow                = { version = "1.0" }
+hex                   = { version = "0.4" }
 http                  = { version = "1.4" }
 humantime             = { version = "2.2" }
 opentelemetry         = { version = "0.31" }

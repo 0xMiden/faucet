@@ -1,6 +1,7 @@
 mod api;
 mod api_key;
 mod frontend;
+mod funding;
 mod logging;
 mod network;
 #[cfg(test)]
@@ -31,6 +32,7 @@ use url::Url;
 use crate::api::{ApiServer, Metadata};
 use crate::api_key::ApiKey;
 use crate::frontend::serve_frontend;
+use crate::funding::FundingClient;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
 
@@ -59,6 +61,7 @@ const ENV_BASE_AMOUNT: &str = "MIDEN_FAUCET_BASE_AMOUNT";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
 const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
+const ENV_FUNDING_SERVICE_URL: &str = "MIDEN_FAUCET_FUNDING_SERVICE_URL";
 const ENV_BATCH_SIZE: &str = "MIDEN_FAUCET_BATCH_SIZE";
 const ENV_IMPORT_OPERATOR_ACCOUNT_PATH: &str = "MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH";
 const ENV_FAUCET_ACCOUNT_ID: &str = "MIDEN_FAUCET_FAUCET_ACCOUNT_ID";
@@ -115,6 +118,10 @@ pub enum Command {
     Start {
         #[clap(flatten)]
         config: ClientConfig,
+
+        /// Base URL of the funding service that emits the notes.
+        #[arg(long = "funding-service-url", value_name = "URL", env = ENV_FUNDING_SERVICE_URL)]
+        funding_service_url: Url,
 
         /// Port to bind the API server. The server will be started on `0.0.0.0:<api-bind-port>`.
         #[arg(long = "api-bind-port", value_name = "PORT", env = ENV_API_BIND_PORT, default_value = "8000")]
@@ -364,6 +371,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
         },
 
         Command::Start {
+            funding_service_url,
             config:
                 ClientConfig {
                     node_url,
@@ -424,7 +432,32 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .await
                 .context("failed to load API keys from store")?;
 
+            // The funding service is the only source of notes, so the faucet refuses to serve
+            // without it. Its status also bounds what the faucet may hand out.
+            let funding = FundingClient::new(funding_service_url.clone(), timeout)?;
+            let funding_status = funding.status().await.with_context(|| {
+                format!("failed to reach the funding service at {funding_service_url}")
+            })?;
+
             let max_claimable_amount = AssetAmount::new(max_claimable_amount)?;
+            anyhow::ensure!(
+                max_claimable_amount.base_units() <= funding_status.max_amount,
+                "the maximum claimable amount {} exceeds the funding service's maximum of {}",
+                max_claimable_amount,
+                funding_status.max_amount,
+            );
+
+            tracing::info!(
+                target: COMPONENT,
+                {
+                    funding_service.url = %funding_service_url,
+                    funding_service.version = funding_status.version,
+                    funding.account.id = funding_status.account_id,
+                    funding.balance = funding_status.balance,
+                    funding.max_amount = funding_status.max_amount,
+                },
+                "Connected to the funding service",
+            );
 
             let rate_limiter_config = PoWRateLimiterConfig {
                 challenge_lifetime: pow_challenge_lifetime,
@@ -451,13 +484,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 None => rand::random(),
             };
 
-            // We keep a channel sender open in the main thread to avoid the faucet closing before
-            // servers can propagate any errors.
-            let tx_mint_requests_clone = tx_mint_requests.clone();
+            // Requests now go to the funding service, but the sender is kept alive so the idle
+            // mint worker does not see a closed channel and shut the faucet down.
+            let _tx_mint_requests = tx_mint_requests;
             let api_server = ApiServer::new(
                 metadata,
                 max_claimable_amount,
-                tx_mint_requests_clone,
+                funding,
                 pow_secret,
                 rate_limiter_config,
                 &api_keys,
@@ -575,16 +608,20 @@ fn parse_node_endpoint(node_url: Option<Url>, network: &FaucetNetwork) -> anyhow
 mod tests {
     use std::env::temp_dir;
     use std::str::FromStr;
+    use std::time::Duration;
 
     use clap::Parser;
     use clap::error::ErrorKind;
-    use miden_client::account::AccountFile;
+    use miden_client::account::{AccountFile, AccountId};
+    use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
     use miden_client_sqlite_store::SqliteStore;
     use rand::SeedableRng;
     use tokio::net::TcpListener;
     use url::Url;
     use uuid::Uuid;
 
+    use crate::funding::FundingClient;
+    use crate::testing::stub_funding_service::{STUB_MAX_AMOUNT, serve_stub_funding_service};
     use crate::testing::stub_rpc_api::serve_stub;
     use crate::{Cli, run_faucet_command};
 
@@ -592,6 +629,40 @@ mod tests {
     // ---------------------------------------------------------------------------------------------
 
     const TEST_FAUCET_ACCOUNT_ID: &str = "0xf640ba4c3fe40e710eb82764ff48e9";
+
+    /// The funding service is the only source of notes, so `start` cannot run without its URL.
+    #[test]
+    fn start_requires_a_funding_service_url() {
+        let Err(error) = Cli::try_parse_from(["miden-faucet", "start"]) else {
+            panic!("--funding-service-url should be required")
+        };
+        assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
+        assert!(error.to_string().contains("--funding-service-url"));
+    }
+
+    // FUNDING SERVICE TESTS
+    // ---------------------------------------------------------------------------------------------
+
+    /// A token request is answered with the note the funding service created.
+    #[tokio::test]
+    async fn get_tokens_returns_the_funding_services_note() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = Url::from_str(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
+        tokio::spawn(async move { serve_stub_funding_service(listener).await.unwrap() });
+
+        let funding = FundingClient::new(url, Duration::from_secs(5)).unwrap();
+
+        let status = funding.status().await.expect("the stub serves a status");
+        assert_eq!(status.max_amount, STUB_MAX_AMOUNT);
+
+        let target = AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE).unwrap();
+        let funded = funding.request_funds(target, 1_000).await.expect("the stub funds it");
+
+        assert_eq!(
+            funded.note.assets().iter().next().unwrap().unwrap_fungible().amount().as_u64(),
+            1_000
+        );
+    }
 
     /// Parses an `init` invocation, with `args` appended to the fixed prefix.
     fn parse_init(args: &[&str]) -> Result<Cli, clap::Error> {
@@ -668,9 +739,11 @@ mod tests {
         );
     }
 
+    /// `start` reaches the funding service first, then fails on the uninitialised store.
     #[tokio::test]
     async fn serve_fails_without_init() {
         let stub_node_url = run_stub_node().await;
+        let funding_service_url = run_stub_funding_service().await;
         let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
 
         let result = Box::pin(run_faucet_command(Cli::parse_from([
@@ -682,11 +755,16 @@ mod tests {
             "8081",
             "--node-url",
             stub_node_url.to_string().as_str(),
+            "--funding-service-url",
+            funding_service_url.to_string().as_str(),
+            "--max-claimable-amount",
+            "1000",
             "--store",
             store_path.to_str().unwrap(),
         ])))
         .await;
-        assert!(result.is_err());
+        let error = format!("{:#}", result.expect_err("the store holds no faucet account"));
+        assert!(error.contains("failed to load faucet"), "unexpected failure: {error}");
     }
 
     // API KEY TESTS
@@ -781,6 +859,13 @@ mod tests {
 
     // TESTING HELPERS
     // ---------------------------------------------------------------------------------------------
+
+    async fn run_stub_funding_service() -> Url {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = Url::from_str(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
+        tokio::spawn(async move { serve_stub_funding_service(listener).await.unwrap() });
+        url
+    }
 
     pub async fn run_stub_node() -> Url {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

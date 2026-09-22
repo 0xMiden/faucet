@@ -8,7 +8,6 @@ use axum::routing::get;
 use http::HeaderValue;
 use miden_client::account::{AccountId, AccountIdError, AddressError};
 use miden_client::utils::hex_to_bytes;
-use miden_faucet_lib::requests::MintRequestSender;
 use miden_faucet_lib::types::AssetAmount;
 use miden_pow_rate_limiter::{Challenge, ChallengeError, PoWRateLimiter, PoWRateLimiterConfig};
 use tokio::net::TcpListener;
@@ -25,6 +24,7 @@ use crate::api::get_metadata::get_metadata;
 use crate::api::get_pow::get_pow;
 use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
 use crate::api_key::ApiKey;
+use crate::funding::FundingClient;
 
 mod events;
 mod get_metadata;
@@ -39,6 +39,7 @@ pub use get_metadata::Metadata;
 /// Serves the faucet's API server that handles token requests.
 #[derive(Clone)]
 pub struct ApiServer {
+    funding: FundingClient,
     mint_state: GetTokensState,
     metadata: Metadata,
     issuance_receiver: watch::Receiver<AssetAmount>,
@@ -50,17 +51,18 @@ impl ApiServer {
     pub fn new(
         metadata: Metadata,
         max_claimable_amount: AssetAmount,
-        mint_request_sender: MintRequestSender,
+        funding: FundingClient,
         pow_secret: [u8; 32],
         rate_limiter_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],
         issuance_receiver: watch::Receiver<AssetAmount>,
     ) -> Self {
-        let mint_state = GetTokensState::new(mint_request_sender, max_claimable_amount);
+        let mint_state = GetTokensState::new(max_claimable_amount);
 
         let rate_limiter = PoWRateLimiter::new_with_cleanup(pow_secret, rate_limiter_config);
 
         ApiServer {
+            funding,
             mint_state,
             metadata,
             issuance_receiver,

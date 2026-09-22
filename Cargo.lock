@@ -3150,6 +3150,7 @@ dependencies = [
  "base64",
  "brotli",
  "clap",
+ "hex",
  "http",
  "humantime",
  "miden-client",
