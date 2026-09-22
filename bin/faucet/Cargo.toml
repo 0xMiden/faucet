@@ -52,6 +52,7 @@ tracing-subscriber    = { workspace = true }
 url                   = { workspace = true }
 
 [dev-dependencies]
+fantoccini    = { version = "0.22" }
 miden-client  = { features = ["testing"], workspace = true }
 miden-testing = { default-features = false, version = "=0.17.0-rc.5" }
 prost         = { version = "0.14" }

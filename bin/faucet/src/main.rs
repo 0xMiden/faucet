@@ -560,23 +560,29 @@ fn parse_node_endpoint(node_url: Option<Url>, network: &FaucetNetwork) -> anyhow
 #[cfg(test)]
 mod tests {
     use std::env::temp_dir;
+    use std::process::Stdio;
     use std::str::FromStr;
     use std::time::Duration;
 
     use clap::Parser;
     use clap::error::ErrorKind;
+    use fantoccini::ClientBuilder;
     use miden_client::account::{AccountFile, AccountId};
+    use miden_client::address::{Address, NetworkId};
     use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
     use miden_client_sqlite_store::SqliteStore;
     use rand::SeedableRng;
+    use serde_json::{Map, json};
+    use tokio::io::AsyncBufReadExt;
     use tokio::net::TcpListener;
     use url::Url;
     use uuid::Uuid;
 
     use crate::funding_service_client::FundingServiceClient;
+    use crate::network::FaucetNetwork;
     use crate::testing::stub_funding_service::{STUB_MAX_AMOUNT, serve_stub_funding_service};
     use crate::testing::stub_rpc_api::serve_stub;
-    use crate::{Cli, run_faucet_command};
+    use crate::{Cli, ClientConfig, run_faucet_command};
 
     // CLI TESTS
     // ---------------------------------------------------------------------------------------------
@@ -808,6 +814,185 @@ mod tests {
 
     // TESTING HELPERS
     // ---------------------------------------------------------------------------------------------
+
+    // INTEGRATION TEST
+    // ---------------------------------------------------------------------------------------------
+
+    /// Starts a stub node, a stub funding service, a faucet connected to both, and a chromedriver
+    /// to drive the faucet website. It loads the page, requests tokens, and checks that every
+    /// request returned a successful status.
+    #[tokio::test]
+    async fn frontend_request_tokens() {
+        let stub_node_url = run_stub_node().await;
+        let funding_service_url = run_stub_funding_service().await;
+        let website_url = run_faucet_server(stub_node_url, funding_service_url);
+        let client = start_fantoccini_client().await;
+
+        // Open the website
+        client.goto(website_url.as_str()).await.unwrap();
+
+        let title = client.title().await.unwrap();
+        assert_eq!(title, "Miden Faucet");
+
+        let network_id = NetworkId::Testnet;
+        let account_id =
+            AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE).unwrap();
+        let address = Address::new(account_id);
+        let address_bech32 = address.encode(network_id);
+
+        // Wait for the website to be fully loaded
+        client
+            .wait()
+            .at_most(Duration::from_secs(10))
+            .for_element(fantoccini::Locator::Css("#token-amount option"))
+            .await
+            .unwrap();
+
+        // Fill in the account address
+        client
+            .find(fantoccini::Locator::Css("#recipient-address"))
+            .await
+            .unwrap()
+            .send_keys(&address_bech32)
+            .await
+            .unwrap();
+
+        // Select the first asset amount option
+        client
+            .find(fantoccini::Locator::Css("#token-amount"))
+            .await
+            .unwrap()
+            .click()
+            .await
+            .unwrap();
+        client
+            .find(fantoccini::Locator::Css("#token-amount option"))
+            .await
+            .unwrap()
+            .click()
+            .await
+            .unwrap();
+
+        // Click the public note button
+        client
+            .find(fantoccini::Locator::Css("#send-public-button"))
+            .await
+            .unwrap()
+            .click()
+            .await
+            .unwrap();
+
+        // Execute a script to get all the failed requests
+        let script = r"
+            let errors = [];
+            performance.getEntriesByType('resource').forEach(entry => {
+                if (entry.responseStatus && entry.responseStatus >= 400) {
+                    errors.push({url: entry.name, status: entry.responseStatus});
+                }
+            });
+            return errors;
+        ";
+        let failed_requests = client.execute(script, vec![]).await.unwrap();
+
+        // Verify all requests are successful
+        assert!(failed_requests.as_array().unwrap().is_empty());
+
+        client.close().await.unwrap();
+    }
+
+    // TESTING HELPERS
+    // ---------------------------------------------------------------------------------------------
+
+    /// Starts a faucet against the given stubs and returns its frontend URL. No `init` is needed:
+    /// `start` reads the token metadata from its flags and the notes from the funding service.
+    fn run_faucet_server(stub_node_url: Url, funding_service_url: Url) -> String {
+        let config = ClientConfig {
+            node_url: Some(stub_node_url),
+            timeout: Duration::from_secs(5),
+            network: FaucetNetwork::Localhost,
+            store_path: temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())),
+            remote_tx_prover_url: None,
+        };
+        let api_bind_port = 8000;
+
+        // Use std::thread to launch the faucet - avoids Send requirements.
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("failed to build runtime");
+
+            rt.block_on(async {
+                Box::pin(run_faucet_command(Cli {
+                    command: crate::Command::Start {
+                        config,
+                        funding_service_url,
+                        decimals: 6,
+                        api_bind_port,
+                        api_public_url: Url::parse(&format!("http://localhost:{api_bind_port}"))
+                            .unwrap(),
+                        frontend_bind_port: 8080,
+                        no_frontend: false,
+                        max_claimable_amount: 1_000_000_000,
+                        pow_secret: Some("test".to_string()),
+                        pow_challenge_lifetime: Duration::from_secs(30),
+                        pow_cleanup_interval: Duration::from_secs(1),
+                        pow_growth_rate: 1.0,
+                        pow_baseline: 12,
+                        base_amount: 100_000,
+                        open_telemetry: false,
+                        explorer_url: None,
+                    },
+                }))
+                .await
+                .expect("failed to start faucet");
+            });
+        });
+
+        "http://localhost:8080".to_string()
+    }
+
+    async fn start_fantoccini_client() -> fantoccini::Client {
+        // Start chromedriver. This requires having chromedriver and chrome installed.
+        let chromedriver_port = "57708";
+        let mut chromedriver = tokio::process::Command::new("chromedriver")
+            .arg(format!("--port={chromedriver_port}"))
+            .stdout(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .expect("failed to start chromedriver");
+        let stdout = chromedriver.stdout.take().unwrap();
+        tokio::spawn(
+            async move { chromedriver.wait().await.expect("chromedriver process failed") },
+        );
+        // Wait for chromedriver to be running
+        let mut reader = tokio::io::BufReader::new(stdout).lines();
+        while let Some(line) = reader.next_line().await.unwrap() {
+            if line.contains("ChromeDriver was started successfully") {
+                break;
+            }
+        }
+
+        ClientBuilder::native()
+            .capabilities(
+                [(
+                    "goog:chromeOptions".to_string(),
+                    json!({"args": ["--headless", "--disable-gpu", "--no-sandbox"]}),
+                )]
+                .into_iter()
+                .collect::<Map<_, _>>(),
+            )
+            .connect(&format!("http://localhost:{chromedriver_port}"))
+            .await
+            .expect("failed to connect to WebDriver")
+    }
+
+    async fn run_stub_funding_service() -> Url {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = Url::from_str(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
+        tokio::spawn(async move { serve_stub_funding_service(listener).await.unwrap() });
+        url
+    }
 
     pub async fn run_stub_node() -> Url {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
