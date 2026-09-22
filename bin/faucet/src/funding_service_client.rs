@@ -34,27 +34,25 @@ const REQUEST_FUNDS_TIMEOUT: Duration = Duration::from_secs(310);
 pub struct FundingServiceClient {
     client: reqwest::Client,
     url: Url,
-    /// Timeout of a status request, which the service answers from memory.
-    status_timeout: Duration,
 }
 
 impl FundingServiceClient {
-    pub fn new(url: Url, status_timeout: Duration) -> anyhow::Result<Self> {
-        // Each request sets its own timeout, because they wait for very different things.
+    /// `timeout` bounds a status request, which the service answers from memory. A funding
+    /// request waits much longer, see [`REQUEST_FUNDS_TIMEOUT`].
+    pub fn new(url: Url, timeout: Duration) -> anyhow::Result<Self> {
         let client = reqwest::Client::builder()
+            .timeout(timeout)
             .build()
             .context("failed to build the funding service HTTP client")?;
 
-        Ok(Self { client, url, status_timeout })
+        Ok(Self { client, url })
     }
 
     /// Reads the funding service's status.
     pub async fn status(&self) -> Result<FundingStatus, FundingServiceError> {
-        let url = self.endpoint("status")?;
         let response = self
             .client
-            .get(url)
-            .timeout(self.status_timeout)
+            .get(self.endpoint("status"))
             .send()
             .await
             .map_err(FundingServiceError::from_transport)?;
@@ -73,10 +71,9 @@ impl FundingServiceClient {
         account_id: AccountId,
         amount: u64,
     ) -> Result<RequestFundsResponse, FundingServiceError> {
-        let url = self.endpoint("request-funds")?;
         let response = self
             .client
-            .post(url)
+            .post(self.endpoint("request-funds"))
             .timeout(REQUEST_FUNDS_TIMEOUT)
             .json(&serde_json::json!({ "account_id": account_id.to_hex(), "amount": amount }))
             .send()
@@ -87,11 +84,8 @@ impl FundingServiceClient {
     }
 
     /// Appends `path` to the service's base URL.
-    fn endpoint(&self, path: &str) -> Result<Url, FundingServiceError> {
-        let base = self.url.as_str().trim_end_matches('/');
-        let url = format!("{base}/{path}");
-        Url::parse(&url)
-            .map_err(|error| FundingServiceError::InvalidUrl { url, error: error.to_string() })
+    fn endpoint(&self, path: &str) -> String {
+        format!("{}/{path}", self.url.as_str().trim_end_matches('/'))
     }
 
     /// Deserializes a successful response, or turns a failed one into a [`FundingServiceError`].
@@ -125,12 +119,8 @@ pub struct FundingStatus {
     pub account_id: String,
     /// The balance of the native asset in the funding account, in base units.
     pub balance: u64,
-    /// The block number which the service is synchronized to.
-    pub chain_tip: u32,
     /// The largest amount which one funding request accepts, in base units.
     pub max_amount: u64,
-    /// The base fee for the verification of a transaction, in base units.
-    pub verification_base_fee: u32,
 }
 
 /// The funding service's `/request-funds` response: a committed P2ID note and the transaction
@@ -172,8 +162,6 @@ pub enum FundingServiceError {
     Rejected { status: StatusCode, message: String },
     #[error("the funding service returned a malformed response")]
     MalformedResponse,
-    #[error("the funding service URL {url} is invalid: {error}")]
-    InvalidUrl { url: String, error: String },
 }
 
 impl FundingServiceError {
@@ -195,8 +183,6 @@ impl FundingServiceError {
         let Self::Rejected { status, .. } = self else {
             return match self {
                 Self::TimedOut => StatusCode::GATEWAY_TIMEOUT,
-                // The faucet built an unusable URL from its own configuration.
-                Self::InvalidUrl { .. } => StatusCode::INTERNAL_SERVER_ERROR,
                 _ => StatusCode::BAD_GATEWAY,
             };
         };
@@ -254,14 +240,6 @@ mod tests {
         assert_eq!(rejected(StatusCode::IM_A_TEAPOT).status_code(), StatusCode::BAD_GATEWAY);
         assert_eq!(FundingServiceError::MalformedResponse.status_code(), StatusCode::BAD_GATEWAY);
         assert_eq!(FundingServiceError::TimedOut.status_code(), StatusCode::GATEWAY_TIMEOUT);
-        assert_eq!(
-            FundingServiceError::InvalidUrl {
-                url: "not a url".to_owned(),
-                error: String::new()
-            }
-            .status_code(),
-            StatusCode::INTERNAL_SERVER_ERROR
-        );
     }
 
     /// Only a rejection the user can act on carries the service's message through.
