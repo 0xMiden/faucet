@@ -80,7 +80,6 @@ const txId = json.tx_id;
 const explorerUrl = json.explorer_url;
 ```
 
-
 ## Examples
 
 Check out the complete working examples below. Make sure the faucet API is running at `http://localhost:8080` before using them.
