@@ -953,7 +953,7 @@ mod tests {
     }
 
     async fn start_fantoccini_client() -> fantoccini::Client {
-        // Start chromedriver. This requires having chromedriver and chrome installed.
+        // Start chromedriver. This requires having chromedriver and chrome installed
         let chromedriver_port = "57708";
         let mut chromedriver = tokio::process::Command::new("chromedriver")
             .arg(format!("--port={chromedriver_port}"))
@@ -973,6 +973,7 @@ mod tests {
             }
         }
 
+        // Start fantoccini client
         ClientBuilder::native()
             .capabilities(
                 [(
