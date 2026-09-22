@@ -435,13 +435,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 growth_rate: pow_growth_rate,
                 baseline: pow_baseline,
             };
-            // The funding account is what the notes are sent from, so its address is the one the
+            // The funder account is what the notes are sent from, so its address is the one the
             // frontend shows.
-            let (funding_account_id, _) = AccountId::parse(&funding_status.account_id)
+            let (funder_account_id, _) = AccountId::parse(&funding_status.account_id)
                 .context("the funding service reported an unparsable account ID")?;
 
             let metadata = Metadata {
-                id: FaucetId::new(funding_account_id, network.to_network_id()?),
+                funder_account_id: FaucetId::new(funder_account_id, network.to_network_id()?),
                 decimals,
                 explorer_url,
                 base_amount,

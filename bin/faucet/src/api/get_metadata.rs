@@ -12,7 +12,8 @@ use crate::api_key::ApiKey;
 /// Describes the faucet metadata needed to show on the frontend.
 #[derive(Clone)]
 pub struct Metadata {
-    pub id: FaucetId,
+    /// The funding service account the notes are sent from.
+    pub funder_account_id: FaucetId,
     pub decimals: u8,
     pub explorer_url: Option<Url>,
     pub base_amount: u64,
@@ -26,7 +27,7 @@ pub async fn get_metadata(State(server): State<ApiServer>) -> Json<GetMetadataRe
     let metadata = server.metadata;
     Json(GetMetadataResponse {
         version: env!("CARGO_PKG_VERSION").to_string(),
-        id: metadata.id.to_bech32(),
+        id: metadata.funder_account_id.to_bech32(),
         decimals: metadata.decimals,
         explorer_url: metadata.explorer_url,
         pow_load_difficulty: server.rate_limiter.get_load_difficulty(ApiKey::default()),
