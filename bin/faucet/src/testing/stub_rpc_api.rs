@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use miden_client::block::{BlockHeader, FeeParameters, ValidatorKeys};
+use miden_client::block::BlockHeader;
 use miden_client::crypto::ecdsa_k256_keccak::SigningKey;
 use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
 use miden_client::rpc::encryption::attestation_commitment;
@@ -31,33 +31,12 @@ struct StubChain {
 }
 
 impl StubChain {
-    /// Builds a chain whose genesis header charges `verification_base_fee` per verification
-    /// cycle. A base fee of zero is a fee-free chain.
-    fn new(verification_base_fee: u32) -> Self {
+    /// Builds a chain from a mock header. Only the validator set and the encryption key matter to
+    /// the stub's consumers.
+    fn new() -> Self {
         let validator_signer = SigningKey::new();
         let encryption_key = KeyExchangeKey::new();
-        let validator_keys = ValidatorKeys::new(vec![validator_signer.public_key()])
-            .expect("a single-key validator set is valid");
-
-        // Only the validator set and the fee parameters matter to the stub's consumers; every
-        // other field is taken from a mock header so the roots stay well-formed.
-        let template = MockChain::new().latest_block_header();
-        let fee_parameters =
-            FeeParameters::new(template.fee_parameters().fee_faucet_id(), verification_base_fee);
-        let genesis = BlockHeader::new(
-            template.version(),
-            template.prev_block_commitment(),
-            template.block_num(),
-            template.chain_commitment(),
-            template.account_root(),
-            template.nullifier_root(),
-            template.note_root(),
-            template.tx_commitment(),
-            template.tx_kernel_commitment(),
-            validator_keys,
-            fee_parameters,
-            template.timestamp(),
-        );
+        let genesis = MockChain::new().latest_block_header();
 
         StubChain {
             genesis,
@@ -81,13 +60,14 @@ impl api_server::Api for StubRpcApi {
             block_header: Some(to_proto_block_header(&self.chain.genesis)),
             mmr_path: None,
             chain_length: None,
+            protocol_config: None,
         }))
     }
 
     async fn get_transaction_encryption_key(
         &self,
         _request: Request<()>,
-    ) -> Result<Response<proto::transaction::TransactionEncryptionKey>, Status> {
+    ) -> Result<Response<proto::submission::TransactionEncryptionKey>, Status> {
         let chain = &self.chain;
         let key_id = b"stub-key-id".to_vec();
         let public_key = chain.encryption_key.public_key().to_bytes();
@@ -103,13 +83,21 @@ impl api_server::Api for StubRpcApi {
         );
         let signature = chain.validator_signer.sign(commitment);
 
-        Ok(Response::new(proto::transaction::TransactionEncryptionKey {
+        Ok(Response::new(proto::submission::TransactionEncryptionKey {
             scheme: IES_SCHEME_X25519_XCHACHA20_POLY1305,
             key_id,
             public_key,
-            attestations: vec![proto::transaction::ValidatorKeyAttestation {
-                validator_public_key: chain.validator_signer.public_key().to_bytes(),
-                signature: signature.to_bytes(),
+            attestations: vec![proto::submission::ValidatorKeyAttestation {
+                validator_public_key: Some(proto::primitives::PublicKey {
+                    key: Some(proto::primitives::public_key::Key::EcdsaK256Keccak(
+                        chain.validator_signer.public_key().to_bytes(),
+                    )),
+                }),
+                signature: Some(proto::primitives::Signature {
+                    signature: Some(proto::primitives::signature::Signature::EcdsaK256Keccak(
+                        signature.to_bytes(),
+                    )),
+                }),
             }],
             next_key: None,
         }))
@@ -127,21 +115,21 @@ impl api_server::Api for StubRpcApi {
 
     async fn get_notes_by_id(
         &self,
-        _request: Request<proto::note::NoteIdList>,
-    ) -> Result<Response<proto::note::CommittedNoteList>, Status> {
+        _request: Request<proto::rpc::NotesByIdRequest>,
+    ) -> Result<Response<proto::rpc::NotesByIdResponse>, Status> {
         unimplemented!()
     }
 
     async fn submit_proven_tx(
         &self,
-        _request: Request<proto::transaction::ProvenTransaction>,
+        _request: Request<proto::submission::ProvenTransactionSubmission>,
     ) -> Result<Response<proto::blockchain::BlockNumber>, Status> {
         Ok(Response::new(proto::blockchain::BlockNumber { block_num: 0 }))
     }
 
     async fn submit_proven_tx_batch(
         &self,
-        _request: Request<proto::transaction::TransactionBatch>,
+        _request: Request<proto::submission::TransactionBatch>,
     ) -> Result<Response<proto::blockchain::BlockNumber>, Status> {
         unimplemented!()
     }
@@ -181,10 +169,24 @@ impl api_server::Api for StubRpcApi {
         Err(Status::not_found("account not found"))
     }
 
+    async fn register_account(
+        &self,
+        _request: Request<proto::rpc::RegisterAccountRequest>,
+    ) -> Result<Response<()>, Status> {
+        unimplemented!()
+    }
+
+    async fn is_account_allowed(
+        &self,
+        _request: Request<proto::rpc::IsAccountAllowedRequest>,
+    ) -> Result<Response<proto::rpc::IsAccountAllowedResponse>, Status> {
+        unimplemented!()
+    }
+
     async fn get_block_by_number(
         &self,
-        _request: Request<proto::blockchain::BlockRequest>,
-    ) -> Result<Response<proto::blockchain::MaybeBlock>, Status> {
+        _request: Request<proto::rpc::BlockRequest>,
+    ) -> Result<Response<proto::rpc::MaybeBlock>, Status> {
         unimplemented!()
     }
 
@@ -211,7 +213,7 @@ impl api_server::Api for StubRpcApi {
 
     async fn get_note_script_by_root(
         &self,
-        _request: Request<proto::note::NoteScriptRoot>,
+        _request: Request<proto::rpc::NoteScriptByRootRequest>,
     ) -> Result<Response<proto::rpc::MaybeNoteScript>, Status> {
         unimplemented!()
     }
@@ -260,9 +262,10 @@ impl api_server::Api for StubRpcApi {
     ) -> Result<Response<proto::rpc::SyncChainMmrResponse>, Status> {
         Ok(Response::new(proto::rpc::SyncChainMmrResponse {
             block_range: Some(proto::rpc::BlockRange { block_from: 0, block_to: 0 }),
-            mmr_delta: Some(proto::primitives::MmrDelta { forest: 0, data: vec![] }),
+            mmr_delta: Some(proto::primitives::MmrDelta { forest: 0, update_data: vec![] }),
             block_header: Some(to_proto_block_header(&self.chain.genesis)),
             block_signatures: vec![],
+            protocol_config: None,
         }))
     }
 
@@ -274,23 +277,12 @@ impl api_server::Api for StubRpcApi {
     }
 }
 
-/// Serves a fee-free stub chain on an already-bound listener.
+/// Serves a stub chain on an already-bound listener.
 ///
 /// The listener is bound by the caller so the port is accepting connections before the caller
 /// hands out its URL; binding it here instead would leave a window where clients are refused.
 pub async fn serve_stub(listener: TcpListener) -> anyhow::Result<()> {
-    serve_stub_with_fee(listener, 0).await
-}
-
-/// Serves a stub chain whose genesis charges `verification_base_fee` on an already-bound
-/// listener. See [`serve_stub`].
-pub async fn serve_stub_with_fee(
-    listener: TcpListener,
-    verification_base_fee: u32,
-) -> anyhow::Result<()> {
-    let api_service = api_server::ApiServer::new(StubRpcApi {
-        chain: Arc::new(StubChain::new(verification_base_fee)),
-    });
+    let api_service = api_server::ApiServer::new(StubRpcApi { chain: Arc::new(StubChain::new()) });
 
     tonic::transport::Server::builder()
         .accept_http1(true)

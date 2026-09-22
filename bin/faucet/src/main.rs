@@ -19,14 +19,7 @@ use miden_client::rpc::Endpoint;
 use miden_client::store::{SettingScope, Store};
 use miden_client_sqlite_store::SqliteStore;
 use miden_faucet_lib::types::AssetAmount;
-use miden_faucet_lib::{
-    Faucet,
-    FaucetAccount,
-    FaucetConfig,
-    create_faucet_operator_account,
-    create_network_faucet_account,
-    fetch_fee_faucet_id,
-};
+use miden_faucet_lib::{Faucet, FaucetAccount, FaucetConfig};
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::SeedableRng;
 use rand::rngs::ChaCha20Rng;
@@ -69,9 +62,6 @@ const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
 const ENV_BATCH_SIZE: &str = "MIDEN_FAUCET_BATCH_SIZE";
 const ENV_IMPORT_OPERATOR_ACCOUNT_PATH: &str = "MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH";
 const ENV_FAUCET_ACCOUNT_ID: &str = "MIDEN_FAUCET_FAUCET_ACCOUNT_ID";
-const ENV_TOKEN_SYMBOL: &str = "MIDEN_FAUCET_TOKEN_SYMBOL";
-const ENV_DECIMALS: &str = "MIDEN_FAUCET_DECIMALS";
-const ENV_MAX_SUPPLY: &str = "MIDEN_FAUCET_MAX_SUPPLY";
 
 // COMMANDS
 // ================================================================================================
@@ -86,31 +76,12 @@ pub struct Cli {
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub enum Command {
-    /// Initialize the faucet with a new or existing account.
+    /// Initialize the faucet with an existing account.
     Init {
         #[clap(flatten)]
         config: ClientConfig,
 
-        /// Symbol of the new token.
-        #[arg(
-            short,
-            long,
-            value_name = "STRING",
-            required_unless_present_any = ["import_operator_account_path", "faucet_account_id"],
-            env = ENV_TOKEN_SYMBOL
-        )]
-        token_symbol: Option<String>,
-
-        /// Decimals of the new token.
-        #[arg(short, long, value_name = "U8", required_unless_present_any = ["import_operator_account_path", "faucet_account_id"], env = ENV_DECIMALS)]
-        decimals: Option<u8>,
-
-        /// Max supply of the new token (in base units).
-        #[arg(short, long, value_name = "U64", required_unless_present_any = ["import_operator_account_path", "faucet_account_id"], env = ENV_MAX_SUPPLY)]
-        max_supply: Option<u64>,
-
-        /// Set an existing operator account file to use, instead of creating a new operator
-        /// account.
+        /// Operator account file to use.
         ///
         /// Must be paired with `--faucet-account-id`, which identifies the faucet account this
         /// operator owns.
@@ -118,22 +89,20 @@ pub enum Command {
             long = "import",
             value_name = "FILE",
             requires = "faucet_account_id",
-            conflicts_with_all = ["token_symbol", "decimals", "max_supply"],
             env = ENV_IMPORT_OPERATOR_ACCOUNT_PATH
         )]
-        import_operator_account_path: Option<PathBuf>,
+        import_operator_account_path: PathBuf,
 
-        /// Account ID of the existing faucet account to use, instead of creating a new one.
+        /// Account ID of the existing faucet account to use.
         /// It must be a network account and it must be already deployed.
         /// Must be paired with `--import`, which supplies the operator account that owns it.
         #[arg(
             long = "faucet-account-id",
             value_name = "ACCOUNT_ID",
             requires = "import_operator_account_path",
-            conflicts_with_all = ["token_symbol", "decimals", "max_supply"],
             env = ENV_FAUCET_ACCOUNT_ID
         )]
-        faucet_account_id: Option<String>,
+        faucet_account_id: String,
     },
 
     /// Manage API keys.
@@ -320,63 +289,28 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     network,
                     store_path,
                 },
-            token_symbol,
-            decimals,
-            max_supply,
             import_operator_account_path,
             faucet_account_id,
         } => {
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
 
-            // `--import` and `--faucet-account-id` require each other, so clap guarantees they are
-            // either both set or both unset.
-            let (faucet_account, operator_account, operator_secret) =
-                if let (Some(operator_account_path), Some(faucet_account_id)) =
-                    (import_operator_account_path, faucet_account_id)
-                {
-                    let operator_account_data = AccountFile::read(operator_account_path)
-                        .context("failed to read operator account data from file")?;
-                    let operator_secret = operator_account_data
-                        .auth_secret_keys
-                        .first()
-                        .context("auth secret key is required")?
-                        .clone();
-                    let (faucet_account_id, _) = AccountId::parse(&faucet_account_id)
-                        .context("failed to parse faucet account id")?;
-                    println!(
-                        "Using existing faucet account {} owned by operator account {}",
-                        faucet_account_id.to_hex(),
-                        operator_account_data.account.id(),
-                    );
-                    (
-                        FaucetAccount::Existing(faucet_account_id),
-                        operator_account_data.account,
-                        operator_secret,
-                    )
-                } else {
-                    println!("Generating new operator account.");
-                    let (operator_account, operator_secret) = create_faucet_operator_account()?;
+            let operator_account_data = AccountFile::read(import_operator_account_path)
+                .context("failed to read operator account data from file")?;
+            let operator_secret = operator_account_data
+                .auth_secret_keys
+                .first()
+                .context("auth secret key is required")?
+                .clone();
+            let (faucet_account_id, _) = AccountId::parse(&faucet_account_id)
+                .context("failed to parse faucet account id")?;
+            println!(
+                "Using existing faucet account {} owned by operator account {}",
+                faucet_account_id.to_hex(),
+                operator_account_data.account.id(),
+            );
+            let faucet_account = FaucetAccount::Existing(faucet_account_id);
+            let operator_account = operator_account_data.account;
 
-                    println!("Generating new faucet account. This may take a few seconds...");
-                    let token_symbol =
-                        token_symbol.expect("token_symbol should be present when not importing");
-                    let decimals = decimals.expect("decimals should be present when not importing");
-                    let max_supply =
-                        max_supply.expect("max_supply should be present when not importing");
-                    let fee_faucet_id = fetch_fee_faucet_id(&node_endpoint, timeout).await?;
-                    let faucet_account = create_network_faucet_account(
-                        token_symbol.as_str(),
-                        max_supply,
-                        decimals,
-                        operator_account.id(),
-                        fee_faucet_id,
-                    )?;
-                    (
-                        FaucetAccount::New(Box::new(faucet_account)),
-                        operator_account,
-                        operator_secret,
-                    )
-                };
             let faucet_config = FaucetConfig {
                 store_path,
                 node_endpoint,
@@ -474,7 +408,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     faucet.account.id = %faucet.faucet_id().account_id,
                     operator.account.id = %faucet.operator_id(),
                     node.endpoint = %node_endpoint,
-                    fee.faucet.id = %fee_parameters.fee_faucet_id(),
                     fee.verification_base_fee = fee_parameters.verification_base_fee(),
                     batch_size
                 },
@@ -492,6 +425,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 .context("failed to load API keys from store")?;
 
             let max_claimable_amount = AssetAmount::new(max_claimable_amount)?;
+
             let rate_limiter_config = PoWRateLimiterConfig {
                 challenge_lifetime: pow_challenge_lifetime,
                 cleanup_interval: pow_cleanup_interval,
@@ -640,26 +574,19 @@ fn parse_node_endpoint(node_url: Option<Url>, network: &FaucetNetwork) -> anyhow
 #[cfg(test)]
 mod tests {
     use std::env::temp_dir;
-    use std::process::Stdio;
     use std::str::FromStr;
-    use std::time::Duration;
 
     use clap::Parser;
     use clap::error::ErrorKind;
-    use fantoccini::ClientBuilder;
-    use miden_client::account::{AccountFile, AccountId, Address, NetworkId};
-    use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
+    use miden_client::account::AccountFile;
     use miden_client_sqlite_store::SqliteStore;
     use rand::SeedableRng;
-    use serde_json::{Map, json};
-    use tokio::io::AsyncBufReadExt;
     use tokio::net::TcpListener;
     use url::Url;
     use uuid::Uuid;
 
-    use crate::network::FaucetNetwork;
-    use crate::testing::stub_rpc_api::{serve_stub, serve_stub_with_fee};
-    use crate::{Cli, ClientConfig, run_faucet_command};
+    use crate::testing::stub_rpc_api::serve_stub;
+    use crate::{Cli, run_faucet_command};
 
     // CLI TESTS
     // ---------------------------------------------------------------------------------------------
@@ -699,76 +626,6 @@ mod tests {
         }
     }
 
-    /// Importing an account and creating one are mutually exclusive.
-    #[test]
-    fn init_import_conflicts_with_token_metadata() {
-        for conflicting in [
-            vec!["--token-symbol", "TEST"],
-            vec!["--decimals", "6"],
-            vec!["--max-supply", "100"],
-        ] {
-            let mut args =
-                vec!["--import", "operator.mac", "--faucet-account-id", TEST_FAUCET_ACCOUNT_ID];
-            args.extend_from_slice(&conflicting);
-
-            let Err(error) = parse_init(&args) else {
-                panic!("{conflicting:?} should conflict with --import")
-            };
-            assert_eq!(error.kind(), ErrorKind::ArgumentConflict);
-        }
-    }
-
-    #[tokio::test]
-    async fn init_with_new_token() {
-        let stub_node_url = run_stub_node().await;
-        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
-        let result = Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
-            "init",
-            "--token-symbol",
-            "TEST",
-            "--decimals",
-            "6",
-            "--max-supply",
-            "100000000000000000",
-            "--node-url",
-            stub_node_url.to_string().as_str(),
-            "--store",
-            store_path.to_str().unwrap(),
-        ])))
-        .await;
-        assert!(result.is_ok(), "{:?}", result.err());
-    }
-
-    /// A new faucet account has to pay for its own deployment transaction, which it cannot do on
-    /// a chain that charges fees, so `init` refuses to create one there and points at importing.
-    #[tokio::test]
-    async fn init_with_new_token_fails_on_fee_charging_chain() {
-        let stub_node_url = run_fee_charging_stub_node(500).await;
-        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
-        let result = Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
-            "init",
-            "--token-symbol",
-            "TEST",
-            "--decimals",
-            "6",
-            "--max-supply",
-            "100000000000000000",
-            "--node-url",
-            stub_node_url.to_string().as_str(),
-            "--store",
-            store_path.to_str().unwrap(),
-        ])))
-        .await;
-
-        let error = format!("{:#}", result.expect_err("a new faucet cannot be deployed with fees"));
-        assert!(
-            error.contains("charges transaction fees") && error.contains("--import"),
-            "expected the fee-charging refusal, got: {error}"
-        );
-    }
-
     /// `--import` and `--faucet-account-id` together take the `FaucetAccount::Existing` path: the
     /// operator account is read from the file and the faucet account is fetched from the node
     /// instead of being created.
@@ -784,7 +641,8 @@ mod tests {
         // Write out an operator account file for `--import` to read.
         let operator_account_path = temp_dir().join(format!("{}.mac", Uuid::new_v4()));
         let (operator_account, operator_secret) =
-            crate::create_faucet_operator_account().expect("failed to create operator account");
+            miden_faucet_lib::create_faucet_operator_account()
+                .expect("failed to create operator account");
         AccountFile::new(operator_account, vec![operator_secret])
             .write(&operator_account_path)
             .expect("failed to write operator account file");
@@ -921,90 +779,6 @@ mod tests {
         assert!(keys.is_empty());
     }
 
-    // INTEGRATION TEST
-    // ---------------------------------------------------------------------------------------------
-
-    /// This test starts a stub node, a faucet connected to the stub node, and a chromedriver
-    /// to test the faucet website. It then loads the website, mints tokens, and checks that all the
-    /// requests returned status 200.
-    #[tokio::test]
-    async fn frontend_mint_tokens() {
-        let stub_node_url = run_stub_node().await;
-        let website_url = run_faucet_server(stub_node_url).await;
-        let client = start_fantoccini_client().await;
-
-        // Open the website
-        client.goto(website_url.as_str()).await.unwrap();
-
-        let title = client.title().await.unwrap();
-        assert_eq!(title, "Miden Faucet");
-
-        let network_id = NetworkId::Testnet;
-        let account_id =
-            AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE).unwrap();
-        let address = Address::new(account_id);
-        let address_bech32 = address.encode(network_id);
-
-        // Wait for the website to be fully loaded
-        client
-            .wait()
-            .at_most(Duration::from_secs(10))
-            .for_element(fantoccini::Locator::Css("#token-amount option"))
-            .await
-            .unwrap();
-
-        // Fill in the account address
-        client
-            .find(fantoccini::Locator::Css("#recipient-address"))
-            .await
-            .unwrap()
-            .send_keys(&address_bech32)
-            .await
-            .unwrap();
-
-        // Select the first asset amount option
-        client
-            .find(fantoccini::Locator::Css("#token-amount"))
-            .await
-            .unwrap()
-            .click()
-            .await
-            .unwrap();
-        client
-            .find(fantoccini::Locator::Css("#token-amount option"))
-            .await
-            .unwrap()
-            .click()
-            .await
-            .unwrap();
-
-        // Click the send button
-        client
-            .find(fantoccini::Locator::Css("#send-button"))
-            .await
-            .unwrap()
-            .click()
-            .await
-            .unwrap();
-
-        // Execute a script to get all the failed requests
-        let script = r"
-            let errors = [];
-            performance.getEntriesByType('resource').forEach(entry => {
-                if (entry.responseStatus && entry.responseStatus >= 400) {
-                    errors.push({url: entry.name, status: entry.responseStatus});
-                }
-            });
-            return errors;
-        ";
-        let failed_requests = client.execute(script, vec![]).await.unwrap();
-
-        // Verify all requests are successful
-        assert!(failed_requests.as_array().unwrap().is_empty());
-
-        client.close().await.unwrap();
-    }
-
     // TESTING HELPERS
     // ---------------------------------------------------------------------------------------------
 
@@ -1014,115 +788,5 @@ mod tests {
         let stub_node_url = Url::from_str(&format!("http://{listener_addr}")).unwrap();
         tokio::spawn(async move { serve_stub(listener).await.unwrap() });
         stub_node_url
-    }
-
-    /// Runs a stub node whose chain charges `verification_base_fee` per verification cycle.
-    async fn run_fee_charging_stub_node(verification_base_fee: u32) -> Url {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let listener_addr = listener.local_addr().unwrap();
-        let stub_node_url = Url::from_str(&format!("http://{listener_addr}")).unwrap();
-        tokio::spawn(
-            async move { serve_stub_with_fee(listener, verification_base_fee).await.unwrap() },
-        );
-        stub_node_url
-    }
-
-    async fn run_faucet_server(stub_node_url: Url) -> String {
-        let config = ClientConfig {
-            node_url: Some(stub_node_url.clone()),
-            timeout: Duration::from_secs(5),
-            network: FaucetNetwork::Localhost,
-            store_path: temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())),
-            remote_tx_prover_url: None,
-        };
-
-        Box::pin(run_faucet_command(Cli {
-            command: crate::Command::Init {
-                config: config.clone(),
-                token_symbol: Some("TEST".to_owned()),
-                decimals: Some(6),
-                max_supply: Some(1_000_000_000_000),
-                import_operator_account_path: None,
-                faucet_account_id: None,
-            },
-        }))
-        .await
-        .expect("failed to create faucet account");
-
-        let api_bind_port = 8000;
-        let frontend_url = "http://localhost:8080";
-
-        // Use std::thread to launch faucet - avoids Send requirements
-        std::thread::spawn(move || {
-            // Create a new runtime for this thread
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("Failed to build runtime");
-
-            // Run the faucet on this thread's runtime
-            rt.block_on(async {
-                Box::pin(run_faucet_command(Cli {
-                    command: crate::Command::Start {
-                        config,
-                        api_bind_port,
-                        api_public_url: Url::parse(&format!("http://localhost:{api_bind_port}"))
-                            .unwrap(),
-                        frontend_bind_port: 8080,
-                        no_frontend: false,
-                        max_claimable_amount: 1_000_000_000,
-                        pow_secret: Some("test".to_string()),
-                        pow_challenge_lifetime: Duration::from_secs(30),
-                        pow_cleanup_interval: Duration::from_secs(1),
-                        pow_growth_rate: 1.0,
-                        pow_baseline: 12,
-                        base_amount: 100_000,
-                        open_telemetry: false,
-                        explorer_url: None,
-                        batch_size: 8,
-                    },
-                }))
-                .await
-                .expect("failed to start faucet");
-            });
-        });
-
-        frontend_url.to_string()
-    }
-
-    async fn start_fantoccini_client() -> fantoccini::Client {
-        // Start chromedriver. This requires having chromedriver and chrome installed
-        let chromedriver_port = "57708";
-        let mut chromedriver = tokio::process::Command::new("chromedriver")
-            .arg(format!("--port={chromedriver_port}"))
-            .stdout(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .expect("failed to start chromedriver");
-        let stdout = chromedriver.stdout.take().unwrap();
-        tokio::spawn(
-            async move { chromedriver.wait().await.expect("chromedriver process failed") },
-        );
-        // Wait for chromedriver to be running
-        let mut reader = tokio::io::BufReader::new(stdout).lines();
-        while let Some(line) = reader.next_line().await.unwrap() {
-            if line.contains("ChromeDriver was started successfully") {
-                break;
-            }
-        }
-
-        // Start fantoccini client
-        ClientBuilder::native()
-            .capabilities(
-                [(
-                    "goog:chromeOptions".to_string(),
-                    json!({"args": ["--headless", "--disable-gpu", "--no-sandbox"]}),
-                )]
-                .into_iter()
-                .collect::<Map<_, _>>(),
-            )
-            .connect(&format!("http://localhost:{chromedriver_port}"))
-            .await
-            .expect("failed to connect to WebDriver")
     }
 }
