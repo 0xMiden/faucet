@@ -359,7 +359,6 @@ body {
 .wallet-icon {
     width: 18px;
     height: 18px;
-    filter: brightness(0) saturate(100%) invert(41%) sepia(96%) saturate(1637%) hue-rotate(360deg) brightness(99%) contrast(109%);
 }
 
 .field-hint {
