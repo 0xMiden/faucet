@@ -1,7 +1,7 @@
 mod api;
 mod api_key;
 mod frontend;
-mod funding;
+mod funding_service_client;
 mod logging;
 mod network;
 #[cfg(test)]
@@ -32,7 +32,7 @@ use url::Url;
 use crate::api::{ApiServer, Metadata};
 use crate::api_key::ApiKey;
 use crate::frontend::serve_frontend;
-use crate::funding::FundingClient;
+use crate::funding_service_client::FundingServiceClient;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
 
@@ -434,7 +434,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 
             // The funding service is the only source of notes, so the faucet refuses to serve
             // without it. Its status also bounds what the faucet may hand out.
-            let funding = FundingClient::new(funding_service_url.clone(), timeout)?;
+            let funding = FundingServiceClient::new(funding_service_url.clone(), timeout)?;
             let funding_status = funding.status().await.with_context(|| {
                 format!("failed to reach the funding service at {funding_service_url}")
             })?;
@@ -620,7 +620,7 @@ mod tests {
     use url::Url;
     use uuid::Uuid;
 
-    use crate::funding::FundingClient;
+    use crate::funding_service_client::FundingServiceClient;
     use crate::testing::stub_funding_service::{STUB_MAX_AMOUNT, serve_stub_funding_service};
     use crate::testing::stub_rpc_api::serve_stub;
     use crate::{Cli, run_faucet_command};
@@ -650,7 +650,7 @@ mod tests {
         let url = Url::from_str(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
         tokio::spawn(async move { serve_stub_funding_service(listener).await.unwrap() });
 
-        let funding = FundingClient::new(url, Duration::from_secs(5)).unwrap();
+        let funding = FundingServiceClient::new(url, Duration::from_secs(5)).unwrap();
 
         let status = funding.status().await.expect("the stub serves a status");
         assert_eq!(status.max_amount, STUB_MAX_AMOUNT);

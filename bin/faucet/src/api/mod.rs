@@ -24,7 +24,7 @@ use crate::api::get_metadata::get_metadata;
 use crate::api::get_pow::get_pow;
 use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
 use crate::api_key::ApiKey;
-use crate::funding::FundingClient;
+use crate::funding_service_client::FundingServiceClient;
 
 mod events;
 mod get_metadata;
@@ -39,7 +39,7 @@ pub use get_metadata::Metadata;
 /// Serves the faucet's API server that handles token requests.
 #[derive(Clone)]
 pub struct ApiServer {
-    funding: FundingClient,
+    funding: FundingServiceClient,
     mint_state: GetTokensState,
     metadata: Metadata,
     issuance_receiver: watch::Receiver<AssetAmount>,
@@ -51,7 +51,7 @@ impl ApiServer {
     pub fn new(
         metadata: Metadata,
         max_claimable_amount: AssetAmount,
-        funding: FundingClient,
+        funding: FundingServiceClient,
         pow_secret: [u8; 32],
         rate_limiter_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],

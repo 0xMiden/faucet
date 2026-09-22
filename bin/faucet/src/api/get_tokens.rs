@@ -12,7 +12,7 @@ use tracing::instrument;
 use crate::COMPONENT;
 use crate::api::{AccountError, ApiServer};
 use crate::api_key::ApiKey;
-use crate::funding::FundingError;
+use crate::funding_service_client::FundingServiceError;
 
 // ENDPOINT
 // ================================================================================================
@@ -79,7 +79,7 @@ pub enum GetTokenError {
     #[error("invalid request: {0}")]
     InvalidRequest(#[source] MintRequestError),
     #[error(transparent)]
-    Funding(FundingError),
+    Funding(FundingServiceError),
 }
 
 impl GetTokenError {
