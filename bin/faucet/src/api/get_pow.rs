@@ -2,10 +2,9 @@ use axum::Json;
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
-use miden_client::account::{AccountId, Address};
-use miden_client::address::AddressId;
-use miden_client::utils::ToHex;
 use miden_faucet_lib::requests::{GetPowResponse, PowQueryParams};
+use miden_protocol::account::AccountId;
+use miden_protocol::address::{Address, AddressId};
 use tracing::{info_span, instrument};
 
 use crate::COMPONENT;
@@ -42,7 +41,7 @@ pub async fn get_pow(
     };
 
     Ok(Json(GetPowResponse {
-        challenge: challenge.to_bytes().to_hex(),
+        challenge: hex::encode(challenge.to_bytes()),
         target: challenge.target(),
         timestamp: challenge.timestamp(),
     }))

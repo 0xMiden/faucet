@@ -16,7 +16,7 @@ workspace = true
 
 [dependencies]
 # Miden dependencies.
-miden-client = { workspace = true }
+miden-protocol = { workspace = true }
 
 # External dependencies.
 serde     = { workspace = true }

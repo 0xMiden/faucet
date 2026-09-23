@@ -48,8 +48,8 @@ from the [releases](https://github.com/0xMiden/faucet/releases) page, for exampl
 docker pull ghcr.io/0xmiden/miden-faucet:<version>
 ```
 
-**Data dir:** the store holds the API keys and defaults to `/faucet/store.sqlite`. Mount a volume at
-`/faucet` if you use API keys.
+**Data dir:** the API keys file defaults to `/faucet/api_keys.txt`. Mount a volume at `/faucet` if
+you use API keys.
 
 ```bash
 docker run --rm -p 8000:8000 -p 8080:8080 \

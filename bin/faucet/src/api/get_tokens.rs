@@ -2,11 +2,11 @@ use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use miden_client::account::{AccountId, Address};
-use miden_client::address::AddressId;
 use miden_faucet_lib::requests::{GetTokensQueryParams, GetTokensResponse, MintRequest};
 use miden_faucet_lib::types::{AssetAmount, AssetAmountError};
 use miden_pow_rate_limiter::ChallengeError;
+use miden_protocol::account::AccountId;
+use miden_protocol::address::{Address, AddressId};
 use tracing::instrument;
 
 use crate::COMPONENT;

@@ -1,6 +1,6 @@
-use miden_client::account::AccountId;
-use miden_client::note::NoteId;
-use miden_client::transaction::TransactionId;
+use miden_protocol::account::AccountId;
+use miden_protocol::note::NoteId;
+use miden_protocol::transaction::TransactionId;
 use serde::{Deserialize, Serialize};
 
 use crate::types::AssetAmount;

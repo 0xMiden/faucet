@@ -9,18 +9,14 @@ mod testing;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use miden_client::account::AccountId;
-use miden_client::rpc::Endpoint;
-use miden_client::store::{SettingScope, Store};
-use miden_client_sqlite_store::SqliteStore;
 use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::types::AssetAmount;
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
+use miden_protocol::account::AccountId;
 use rand::SeedableRng;
 use rand::rngs::ChaCha20Rng;
 use sha2::{Digest, Sha256};
@@ -38,7 +34,7 @@ use crate::network::FaucetNetwork;
 // =================================================================================================
 
 const COMPONENT: &str = "miden-faucet-server";
-const DEFAULT_STORE_PATH: &str = "faucet_client_store.sqlite3";
+const DEFAULT_API_KEYS_PATH: &str = "api_keys.txt";
 
 const ENV_API_BIND_PORT: &str = "MIDEN_FAUCET_API_BIND_PORT";
 const ENV_API_PUBLIC_URL: &str = "MIDEN_FAUCET_API_PUBLIC_URL";
@@ -55,7 +51,7 @@ const ENV_POW_GROWTH_RATE: &str = "MIDEN_FAUCET_POW_GROWTH_RATE";
 const ENV_POW_BASELINE: &str = "MIDEN_FAUCET_POW_BASELINE";
 const ENV_BASE_AMOUNT: &str = "MIDEN_FAUCET_BASE_AMOUNT";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
-const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
+const ENV_API_KEYS: &str = "MIDEN_FAUCET_API_KEYS";
 const ENV_DECIMALS: &str = "MIDEN_FAUCET_DECIMALS";
 const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
 const ENV_FUNDING_SERVICE_URL: &str = "MIDEN_FAUCET_FUNDING_SERVICE_URL";
@@ -175,16 +171,16 @@ pub enum ApiKeyCommand {
     /// Prints out the generated API key to stdout. The key is also stored in the faucet's
     /// database so that it is automatically loaded when the faucet starts.
     Create {
-        /// Path to the `SQLite` store.
-        #[arg(long = "store", value_name = "FILE", default_value = DEFAULT_STORE_PATH, env = ENV_STORE)]
-        store_path: PathBuf,
+        /// Path to the file holding the API keys, one encoded key per line.
+        #[arg(long = "api-keys", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
+        api_keys_path: PathBuf,
     },
 
     /// Remove an API key from the store.
     Remove {
-        /// Path to the `SQLite` store.
-        #[arg(long = "store", value_name = "FILE", default_value = DEFAULT_STORE_PATH, env = ENV_STORE)]
-        store_path: PathBuf,
+        /// Path to the file holding the API keys, one encoded key per line.
+        #[arg(long = "api-keys", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
+        api_keys_path: PathBuf,
 
         /// The API key to remove (encoded string).
         api_key: String,
@@ -192,18 +188,18 @@ pub enum ApiKeyCommand {
 
     /// List all API keys in the store.
     List {
-        /// Path to the `SQLite` store.
-        #[arg(long = "store", value_name = "FILE", default_value = DEFAULT_STORE_PATH, env = ENV_STORE)]
-        store_path: PathBuf,
+        /// Path to the file holding the API keys, one encoded key per line.
+        #[arg(long = "api-keys", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
+        api_keys_path: PathBuf,
     },
 }
 
 /// Configuration for the faucet client.
 #[derive(Parser, Debug, Clone)]
 pub struct ClientConfig {
-    /// Path to the `SQLite` store.
-    #[arg(long = "store", value_name = "FILE", default_value = DEFAULT_STORE_PATH, env = ENV_STORE)]
-    store_path: PathBuf,
+    /// Path to the file holding the API keys, one encoded key per line.
+    #[arg(long = "api-keys", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
+    api_keys_path: PathBuf,
 
     /// Timeout for attempting to connect to the node.
     #[arg(long = "timeout", value_name = "DURATION", default_value = "5s", env = ENV_TIMEOUT, value_parser = humantime::parse_duration)]
@@ -249,28 +245,25 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
     // Note: open-telemetry is handled in main.
     match cli.command {
         Command::ApiKey { command } => match command {
-            ApiKeyCommand::Create { store_path } => {
-                let store = SqliteStore::new(store_path).await.context("failed to open store")?;
+            ApiKeyCommand::Create { api_keys_path } => {
                 let mut rng = ChaCha20Rng::from_seed(rand::random());
                 let key = ApiKey::generate(&mut rng);
 
-                add_api_key_to_store(&store, &key).await?;
+                api_key::add(&api_keys_path, &key).await?;
 
                 println!("{}", key.encode());
             },
 
-            ApiKeyCommand::Remove { store_path, api_key } => {
-                let store = SqliteStore::new(store_path).await.context("failed to open store")?;
+            ApiKeyCommand::Remove { api_keys_path, api_key } => {
                 let key = ApiKey::decode(&api_key).context("failed to decode API key")?;
 
-                remove_api_key_from_store(&store, &key).await?;
+                api_key::remove(&api_keys_path, &key).await?;
 
                 println!("API key removed");
             },
 
-            ApiKeyCommand::List { store_path } => {
-                let store = SqliteStore::new(store_path).await.context("failed to open store")?;
-                let encoded_keys = list_api_keys_from_store(&store).await?;
+            ApiKeyCommand::List { api_keys_path } => {
+                let encoded_keys = api_key::list(&api_keys_path).await?;
                 if encoded_keys.is_empty() {
                     println!("No API keys found.");
                 } else {
@@ -283,7 +276,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 
         Command::Start {
             funding_service_url,
-            config: ClientConfig { node_url, timeout, network, store_path },
+            config:
+                ClientConfig {
+                    node_url,
+                    timeout,
+                    network,
+                    api_keys_path,
+                },
             api_bind_port,
             api_public_url,
             no_frontend,
@@ -299,14 +298,10 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             explorer_url,
             decimals,
         } => {
-            let node_endpoint = parse_node_endpoint(node_url, &network)?;
+            let node_url = parse_node_url(node_url, &network)?;
 
-            let store =
-                Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
-
-            let api_keys = load_api_keys_from_store(&store)
-                .await
-                .context("failed to load API keys from store")?;
+            let api_keys =
+                api_key::load(&api_keys_path).await.context("failed to load the API keys")?;
 
             // The funding service is the only source of notes, so the faucet refuses to serve
             // without it. Its status also bounds what the faucet may hand out.
@@ -380,7 +375,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             if !no_frontend {
                 let frontend_url = Url::parse(&format!("http://0.0.0.0:{frontend_bind_port}"))?;
                 let frontend_id = tasks
-                    .spawn(serve_frontend(frontend_url, api_public_url, node_endpoint.to_string()))
+                    .spawn(serve_frontend(frontend_url, api_public_url, node_url.to_string()))
                     .id();
                 tasks_ids.insert(frontend_id, "frontend");
             }
@@ -401,63 +396,18 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 // UTILITIES
 // =================================================================================================
 
-/// Loads all API keys from the store's settings table.
-async fn load_api_keys_from_store(store: &SqliteStore) -> anyhow::Result<Vec<ApiKey>> {
-    list_api_keys_from_store(store)
-        .await?
-        .iter()
-        .map(|encoded| ApiKey::decode(encoded).map_err(|e| anyhow::anyhow!(e)))
-        .collect()
-}
-
-/// Lists all API keys from the store as encoded strings.
-async fn list_api_keys_from_store(store: &SqliteStore) -> anyhow::Result<Vec<String>> {
-    let all_keys = store
-        .list_setting_keys(SettingScope::User)
-        .await
-        .context("failed to list settings")?;
-    Ok(all_keys
-        .into_iter()
-        .filter_map(|key| key.strip_prefix(api_key::API_KEY_SETTING_PREFIX).map(String::from))
-        .collect())
-}
-
-/// Stores a single API key in the settings table.
-async fn add_api_key_to_store(store: &SqliteStore, key: &ApiKey) -> anyhow::Result<()> {
-    let setting_key = format!("{}{}", api_key::API_KEY_SETTING_PREFIX, key.encode());
-    store
-        .set_setting(SettingScope::User, setting_key, vec![])
-        .await
-        .context("failed to store API key")
-}
-
-/// Removes a single API key from the settings table.
-///
-/// Fails if the key is not present in the store, so a typo does not report a successful removal.
-async fn remove_api_key_from_store(store: &SqliteStore, key: &ApiKey) -> anyhow::Result<()> {
-    let setting_key = format!("{}{}", api_key::API_KEY_SETTING_PREFIX, key.encode());
-    let removed = store
-        .remove_setting(SettingScope::User, setting_key)
-        .await
-        .context("failed to remove API key")?;
-    anyhow::ensure!(removed, "API key not found in the store");
-    Ok(())
-}
-
-/// Parses the node endpoint from the cli arguments. If an explicit url is provided, it is used.
+/// Parses the node url from the cli arguments. If an explicit url is provided, it is used.
 /// Otherwise, it is derived from the specified network.
-fn parse_node_endpoint(node_url: Option<Url>, network: &FaucetNetwork) -> anyhow::Result<Endpoint> {
-    let url = if let Some(node_url) = node_url {
-        node_url.to_string()
-    } else {
-        network
-            .to_rpc_endpoint()
-            .context("no node url provided for the custom network")?
-    };
+fn parse_node_url(node_url: Option<Url>, network: &FaucetNetwork) -> anyhow::Result<Url> {
+    if let Some(node_url) = node_url {
+        return Ok(node_url);
+    }
 
-    Endpoint::try_from(url.as_str())
-        .map_err(anyhow::Error::msg)
-        .with_context(|| format!("failed to parse node url: {url}"))
+    let url = network
+        .to_rpc_endpoint()
+        .context("no node url provided for the custom network")?;
+
+    Url::parse(&url).with_context(|| format!("failed to parse node url: {url}"))
 }
 
 // TESTS
@@ -473,11 +423,9 @@ mod tests {
     use clap::Parser;
     use clap::error::ErrorKind;
     use fantoccini::ClientBuilder;
-    use miden_client::account::AccountId;
-    use miden_client::address::{Address, NetworkId};
-    use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
-    use miden_client_sqlite_store::SqliteStore;
-    use rand::SeedableRng;
+    use miden_protocol::account::AccountId;
+    use miden_protocol::address::{Address, NetworkId};
+    use miden_protocol::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
     use tokio::net::TcpListener;
@@ -555,94 +503,49 @@ mod tests {
     // ---------------------------------------------------------------------------------------------
 
     #[tokio::test]
-    async fn create_api_key_persists_to_store() {
-        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
+    async fn api_keys_are_created_listed_and_removed() {
+        let api_keys_path = temp_dir().join(format!("{}.keys", Uuid::new_v4()));
+        let path = api_keys_path.to_str().unwrap().to_owned();
 
-        // Create an API key via the CLI command.
-        let result = Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
-            "api-key",
-            "create",
-            "--store",
-            store_path.to_str().unwrap(),
-        ])))
-        .await;
-        assert!(result.is_ok());
-
-        // Verify the key is present in the store.
-        let store = SqliteStore::new(store_path).await.unwrap();
-        let keys = crate::load_api_keys_from_store(&store).await.unwrap();
-        assert_eq!(keys.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn list_api_keys_shows_persisted_keys() {
-        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
-
-        // Create two API keys.
         for _ in 0..2 {
             Box::pin(run_faucet_command(Cli::parse_from([
                 "miden-faucet",
                 "api-key",
                 "create",
-                "--store",
-                store_path.to_str().unwrap(),
+                "--api-keys",
+                &path,
             ])))
             .await
             .unwrap();
         }
 
-        // Verify both keys can be loaded.
-        let store = SqliteStore::new(store_path.clone()).await.unwrap();
-        let keys = crate::load_api_keys_from_store(&store).await.unwrap();
+        let keys = crate::api_key::list(&api_keys_path).await.unwrap();
         assert_eq!(keys.len(), 2);
 
-        // Also verify the list-api-keys command runs without error.
-        let result = Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
-            "api-key",
-            "list",
-            "--store",
-            store_path.to_str().unwrap(),
-        ])))
-        .await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn remove_api_key_deletes_from_store() {
-        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
-
-        // Create an API key.
-        let store = SqliteStore::new(store_path.clone()).await.unwrap();
-        let mut rng = rand::rngs::ChaCha20Rng::from_seed(rand::random());
-        let key = crate::api_key::ApiKey::generate(&mut rng);
-        crate::add_api_key_to_store(&store, &key).await.unwrap();
-
-        // Verify the key exists.
-        let keys = crate::load_api_keys_from_store(&store).await.unwrap();
-        assert_eq!(keys.len(), 1);
-
-        // Remove the key via the CLI command.
-        let result = Box::pin(run_faucet_command(Cli::parse_from([
+        Box::pin(run_faucet_command(Cli::parse_from([
             "miden-faucet",
             "api-key",
             "remove",
-            "--store",
-            store_path.to_str().unwrap(),
-            &key.encode(),
+            "--api-keys",
+            &path,
+            &keys[0],
         ])))
-        .await;
-        assert!(result.is_ok());
+        .await
+        .unwrap();
 
-        // Verify the key was removed.
-        let store = SqliteStore::new(store_path).await.unwrap();
-        let keys = crate::load_api_keys_from_store(&store).await.unwrap();
-        assert!(keys.is_empty());
+        assert_eq!(crate::api_key::list(&api_keys_path).await.unwrap(), vec![keys[1].clone()]);
+
+        // The list command runs against the same file without error.
+        Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "api-key",
+            "list",
+            "--api-keys",
+            &path,
+        ])))
+        .await
+        .unwrap();
     }
-
-    // TESTING HELPERS
-    // ---------------------------------------------------------------------------------------------
 
     // INTEGRATION TEST
     // ---------------------------------------------------------------------------------------------
@@ -746,7 +649,7 @@ mod tests {
             node_url: Some(stub_node_url),
             timeout: Duration::from_secs(5),
             network: FaucetNetwork::Localhost,
-            store_path: temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())),
+            api_keys_path: temp_dir().join(format!("{}.keys", Uuid::new_v4())),
         };
         let api_bind_port = 8000;
         let frontend_url = "http://localhost:8080";

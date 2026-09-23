@@ -26,6 +26,8 @@ miden-pow-rate-limiter = { path = "crates/pow", version = "0.16" }
 miden-client              = { version = "0.17.0-rc.1" }
 miden-client-cli          = { version = "0.17.0-rc.1" }
 miden-client-sqlite-store = { version = "0.17.0-rc.1" }
+miden-protocol            = { version = "=0.17.0-rc.5" }
+miden-standards           = { version = "=0.17.0-rc.5" }
 
 # External dependencies
 anyhow                = { version = "1.0" }

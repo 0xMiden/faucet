@@ -8,10 +8,10 @@ use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use axum::http::StatusCode;
-use miden_client::account::AccountId;
-use miden_client::note::Note;
-use miden_client::transaction::TransactionId;
-use miden_client::utils::Deserializable;
+use miden_protocol::account::AccountId;
+use miden_protocol::note::Note;
+use miden_protocol::transaction::TransactionId;
+use miden_protocol::utils::serde::Deserializable;
 use serde::Deserialize;
 use tracing::instrument;
 use url::Url;

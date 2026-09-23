@@ -3329,11 +3329,11 @@ dependencies = [
  "hex",
  "http 1.5.0",
  "humantime",
- "miden-client",
- "miden-client-sqlite-store",
  "miden-faucet-lib",
  "miden-node-proto-build",
  "miden-pow-rate-limiter",
+ "miden-protocol",
+ "miden-standards",
  "miden-testing",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -3385,7 +3385,7 @@ dependencies = [
 name = "miden-faucet-lib"
 version = "0.16.0"
 dependencies = [
- "miden-client",
+ "miden-protocol",
  "serde",
  "thiserror 2.0.20",
 ]

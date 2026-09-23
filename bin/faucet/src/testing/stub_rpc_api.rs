@@ -1,11 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Context;
-use miden_client::block::BlockHeader;
-use miden_client::crypto::ecdsa_k256_keccak::SigningKey;
-use miden_client::crypto::eddsa_25519_sha512::KeyExchangeKey;
-use miden_client::rpc::encryption::attestation_commitment;
-use miden_client::utils::Serializable;
+use miden_protocol::block::BlockHeader;
 use miden_testing::MockChain;
 use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -16,9 +12,6 @@ use super::proto;
 use super::proto::rpc::api_server;
 use super::proto::to_proto_block_header;
 
-/// Wire identifier of `IES_SCHEME_X25519_XCHACHA20_POLY1305`, the scheme the client seals for.
-const IES_SCHEME_X25519_XCHACHA20_POLY1305: i32 = 1;
-
 /// Chain state served by the stub.
 ///
 /// The header is stable across requests and commits to a validator signing key the stub holds,
@@ -26,22 +19,13 @@ const IES_SCHEME_X25519_XCHACHA20_POLY1305: i32 = 1;
 /// against the header it previously stored.
 struct StubChain {
     genesis: BlockHeader,
-    validator_signer: SigningKey,
-    encryption_key: KeyExchangeKey,
 }
 
 impl StubChain {
-    /// Builds a chain from a mock header. Only the validator set and the encryption key matter to
-    /// the stub's consumers.
+    /// Builds a chain from a mock header, which is all the stub's consumers read.
     fn new() -> Self {
-        let validator_signer = SigningKey::new();
-        let encryption_key = KeyExchangeKey::new();
-        let genesis = MockChain::new().latest_block_header();
-
         StubChain {
-            genesis,
-            validator_signer,
-            encryption_key,
+            genesis: MockChain::new().latest_block_header(),
         }
     }
 }
@@ -68,39 +52,7 @@ impl api_server::Api for StubRpcApi {
         &self,
         _request: Request<()>,
     ) -> Result<Response<proto::submission::TransactionEncryptionKey>, Status> {
-        let chain = &self.chain;
-        let key_id = b"stub-key-id".to_vec();
-        let public_key = chain.encryption_key.public_key().to_bytes();
-
-        // The commitment layout is mirrored from the validator; signing it with the key
-        // committed in the stub's header makes the attestation verify on the client.
-        let commitment = attestation_commitment(
-            IES_SCHEME_X25519_XCHACHA20_POLY1305 as u32,
-            &key_id,
-            chain.genesis.commitment(),
-            &public_key,
-            None,
-        );
-        let signature = chain.validator_signer.sign(commitment);
-
-        Ok(Response::new(proto::submission::TransactionEncryptionKey {
-            scheme: IES_SCHEME_X25519_XCHACHA20_POLY1305,
-            key_id,
-            public_key,
-            attestations: vec![proto::submission::ValidatorKeyAttestation {
-                validator_public_key: Some(proto::primitives::PublicKey {
-                    key: Some(proto::primitives::public_key::Key::EcdsaK256Keccak(
-                        chain.validator_signer.public_key().to_bytes(),
-                    )),
-                }),
-                signature: Some(proto::primitives::Signature {
-                    signature: Some(proto::primitives::signature::Signature::EcdsaK256Keccak(
-                        signature.to_bytes(),
-                    )),
-                }),
-            }],
-            next_key: None,
-        }))
+        unimplemented!()
     }
 
     async fn sync_notes(

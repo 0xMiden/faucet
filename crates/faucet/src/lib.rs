@@ -1,5 +1,5 @@
-use miden_client::account::AccountId;
-use miden_client::address::{Address, NetworkId};
+use miden_protocol::account::AccountId;
+use miden_protocol::address::{Address, NetworkId};
 
 pub mod requests;
 pub mod types;

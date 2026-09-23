@@ -2,9 +2,9 @@
 //! `miden-node-proto-build`, along with conversions from domain types into proto types.
 #![allow(dead_code, clippy::pedantic, clippy::doc_markdown, clippy::large_enum_variant)]
 
-use miden_client::Word;
-use miden_client::block::BlockHeader;
-use miden_client::utils::Serializable;
+use miden_protocol::Word;
+use miden_protocol::block::BlockHeader;
+use miden_protocol::utils::serde::Serializable;
 
 pub mod account {
     include!(concat!(env!("OUT_DIR"), "/account.rs"));

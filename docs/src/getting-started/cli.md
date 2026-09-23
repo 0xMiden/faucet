@@ -12,9 +12,9 @@ The faucet comes with two CLI tools:
 | Command | Description |
 |---------|-------------|
 | `start` | Start the faucet server |
-| `api-key create` | Generate an API key and persist it to the store |
-| `api-key remove` | Remove a persisted API key from the store |
-| `api-key list` | List all persisted API keys in the store |
+| `api-key create` | Generate an API key and append it to the API keys file |
+| `api-key remove` | Remove an API key from the API keys file |
+| `api-key list` | List all API keys in the API keys file |
 | `help` | Show help information |
 
 The faucet owns no account, so there is no `init` step.
@@ -42,7 +42,7 @@ The Miden Faucet can be configured using:
 | `--network` | Network configuration | `localhost` | No |
 | `--timeout` | Funding service request timeout | `5s` | No |
 | `--max-claimable-amount` | Max claimable base units per request | `1000000000` | No |
-| `--store` | `SQLite` store path, used for the API keys | `faucet_client_store.sqlite3` | No |
+| `--api-keys` | Path to the API keys file | `api_keys.txt` | No |
 | `--explorer-url` | Midenscan URL | - | No |
 | `--base-amount` | Token amount (in base units) at which the difficulty of the challenge starts to increase. | `100000000` | No |
 
@@ -79,7 +79,7 @@ export MIDEN_FAUCET_FRONTEND_BIND_PORT=8080
 export MIDEN_FAUCET_NO_FRONTEND=false
 export MIDEN_FAUCET_API_PUBLIC_URL=http://localhost:8000
 export MIDEN_FAUCET_MAX_CLAIMABLE_AMOUNT=1000000000
-export MIDEN_FAUCET_STORE=faucet_client_store.sqlite3
+export MIDEN_FAUCET_API_KEYS=api_keys.txt
 export MIDEN_FAUCET_ENABLE_OTEL=true
 export MIDEN_FAUCET_BASE_AMOUNT=100000000
 
@@ -136,7 +136,7 @@ export MIDEN_FAUCET_POW_GROWTH_RATE=0.1
 
 ## API Key Management
 
-API keys are persisted in the faucet's SQLite store and automatically loaded when the faucet starts.
+API keys live in a newline-delimited file of encoded keys, which the faucet reads at startup.
 
 ### Create an API Key
 
@@ -144,11 +144,11 @@ API keys are persisted in the faucet's SQLite store and automatically loaded whe
 miden-faucet api-key create
 ```
 
-Generates a new API key, persists it to the store, and prints it to stdout.
+Generates a new API key, appends it to the file, and prints it to stdout.
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
+| `--api-keys` | Path to the API keys file | `api_keys.txt` | No |
 
 ### List API Keys
 
@@ -156,11 +156,11 @@ Generates a new API key, persists it to the store, and prints it to stdout.
 miden-faucet api-key list
 ```
 
-Lists all persisted API keys in the store.
+Lists all API keys in the file.
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
+| `--api-keys` | Path to the API keys file | `api_keys.txt` | No |
 
 ### Remove an API Key
 
@@ -168,31 +168,21 @@ Lists all persisted API keys in the store.
 miden-faucet api-key remove <KEY>
 ```
 
-Removes a persisted API key from the store.
+Removes an API key from the file. Fails if the key is not there.
 
 | Argument/Option | Description | Default | Required |
 |--------|-------------|---------|----------|
 | `<KEY>` | The API key to remove (encoded string) | - | Yes |
-| `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
+| `--api-keys` | Path to the API keys file | `api_keys.txt` | No |
 
 ### API Key Loading
 
-When the faucet starts, it automatically loads all API keys persisted in the store via the `api-key create` command.
+When the faucet starts, it loads every API key in the file.
 
 ### API Key Benefits
 
 - **Rate Limiting**: Separate rate limits per API key
 - **Access Control**: Distribute keys to different users/teams
-
-## Store Configuration
-
-### SQLite Store
-
-This is the store that is used by the Miden Client to store all the faucet account state. Default is SQLite:
-
-```bash
---store ./faucet_client_store.sqlite3.sqlite3
-```
 
 ## Monitoring Configuration
 
