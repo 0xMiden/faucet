@@ -1,8 +1,7 @@
 //! HTTP client for the funding service.
 //!
 //! The funding service holds the chain's native asset and creates a public P2ID note for every
-//! request. It waits until the note is committed before answering, so a successful response
-//! describes a note that already exists on chain.
+//! request.
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -22,13 +21,6 @@ use crate::COMPONENT;
 // CLIENT
 // ================================================================================================
 
-/// How long the faucet waits for a funding request.
-///
-/// The funding service answers only once the note is committed, which takes at least one block
-/// interval, so the node timeout does not apply here. The service's own HTTP timeout is 5 minutes,
-/// past which it answers 408; the faucet waits up to 1 minute.
-const REQUEST_FUNDS_TIMEOUT: Duration = Duration::from_secs(60);
-
 /// How long a `/status` response is reused before the service is asked again.
 const STATUS_CACHE_LIFETIME: Duration = Duration::from_secs(20);
 
@@ -43,8 +35,7 @@ pub struct FundingServiceClient {
 }
 
 impl FundingServiceClient {
-    /// `timeout` bounds a status request, which the service answers from memory. A funding
-    /// request waits much longer, see [`REQUEST_FUNDS_TIMEOUT`].
+    /// Creates a client for the funding service at `url`, with `timeout` bounding every request.
     pub fn new(url: Url, timeout: Duration) -> anyhow::Result<Self> {
         let client = reqwest::Client::builder()
             .timeout(timeout)
@@ -95,9 +86,6 @@ impl FundingServiceClient {
 
     /// Requests a public P2ID note holding `amount` base units of the native asset and targeting
     /// `account_id`.
-    ///
-    /// The funding service answers once the note is committed, which takes at least one block
-    /// interval.
     #[instrument(target = COMPONENT, name = "funding.request_funds", skip_all, err)]
     pub async fn request_funds(
         &self,
@@ -107,7 +95,6 @@ impl FundingServiceClient {
         let response = self
             .client
             .post(self.endpoint("request-funds"))
-            .timeout(REQUEST_FUNDS_TIMEOUT)
             .json(&serde_json::json!({ "account_id": account_id.to_hex(), "amount": amount }))
             .send()
             .await
@@ -157,8 +144,8 @@ pub struct FundingServiceStatus {
     pub max_amount: u64,
 }
 
-/// The funding service's `/request-funds` response: a committed P2ID note and the transaction
-/// which created it. The service sends both as hexadecimal of their serialized form.
+/// The funding service's `/request-funds` response: the queued P2ID note and the transaction
+/// which will create it. The service sends both as hexadecimal of their serialized form.
 #[derive(Debug, Deserialize)]
 pub struct RequestFundsResponse {
     #[serde(deserialize_with = "deserialize_hex")]
