@@ -903,6 +903,14 @@ mod tests {
     // TESTING HELPERS
     // ---------------------------------------------------------------------------------------------
 
+    pub async fn run_stub_node() -> Url {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let listener_addr = listener.local_addr().unwrap();
+        let stub_node_url = Url::from_str(&format!("http://{listener_addr}")).unwrap();
+        tokio::spawn(async move { serve_stub(listener).await.unwrap() });
+        stub_node_url
+    }
+
     /// Starts a faucet against the given stubs and returns its frontend URL.
     fn run_faucet_server(stub_node_url: Url, funding_service_url: Url) -> String {
         let config = ClientConfig {
@@ -917,6 +925,7 @@ mod tests {
 
         // Use std::thread to launch faucet - avoids Send requirements
         std::thread::spawn(move || {
+            // Create a new runtime for this thread
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -994,13 +1003,5 @@ mod tests {
         let url = Url::from_str(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
         tokio::spawn(async move { serve_stub_funding_service(listener).await.unwrap() });
         url
-    }
-
-    pub async fn run_stub_node() -> Url {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let listener_addr = listener.local_addr().unwrap();
-        let stub_node_url = Url::from_str(&format!("http://{listener_addr}")).unwrap();
-        tokio::spawn(async move { serve_stub(listener).await.unwrap() });
-        stub_node_url
     }
 }
