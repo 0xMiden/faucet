@@ -3385,16 +3385,9 @@ dependencies = [
 name = "miden-faucet-lib"
 version = "0.16.0"
 dependencies = [
- "anyhow",
  "miden-client",
- "miden-client-sqlite-store",
- "rand 0.10.2",
  "serde",
  "thiserror 2.0.20",
- "tokio",
- "tracing",
- "url",
- "uuid",
 ]
 
 [[package]]

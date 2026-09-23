@@ -9,68 +9,35 @@ For comprehensive guides, API reference, and examples, see the [Miden Faucet Doc
 ## Running the faucet
 
 The faucet comes with two CLI tools:
-- **miden-faucet**: Runs the faucet, used for initializing and starting the faucet.
+- **miden-faucet**: Runs the faucet server.
 - **miden-faucet-client**: Used for interacting with a live faucet, i.e. for requesting tokens from a running faucet.
+
+The faucet owns no account and submits no transactions. It validates requests and forwards them to a
+[funding service](https://github.com/0xMiden/node), which holds the chain's native asset, creates a
+public P2ID note per request and waits until the note is committed before answering. The faucet is
+the gatekeeper in front of it: the funding service has no authentication or rate limiting of its
+own, so only the faucet should be able to reach it.
 
 1. Install both faucet binaries:
 ```bash
 make install-faucet
 ```
 
-2. Initialize the faucet server. This will generate an new operator account and a network faucet account with the specified token configuration, and save the account data to a local SQLite store:
-
-```bash
-miden-faucet init \
-  --token-symbol MIDEN \
-  --decimals 6 \
-  --max-supply 100000000000000000 \
-  --network testnet
-```
-
-> [!TIP]
-> `miden-faucet init` can also be run with existing operator and faucet accounts:
->
-> ```bash
-> miden-faucet init \
->   --import /path/to/operator_account.mac \
->   --faucet-account-id 0x<faucet_account_id> \
->   --network testnet
-> ```
->
-> - `--import` — path to an exported operator account file
-> - `--faucet-account-id` — ID of a faucet account that already exists on the target network
-
-3. Start the faucet:
+2. Start the faucet, pointing it at a node and at the funding service:
 ```bash
 miden-faucet start \
+  --funding-service-url http://localhost:50401 \
+  --decimals 6 \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ```
 
-## Running on a chain that charges fees (devnet)
+`start` reads the funding service's `/status` first and fails if it cannot be reached. It also
+fails if `--max-claimable-amount` is larger than the funding service's own maximum. There is no
+`init` step: the faucet holds no account.
 
-On a chain that charges transaction fees, every transaction pays in the chain's native asset out of
-the executing account's vault. The operator account is the one that pays: it covers each MINT
-transaction and prepays the network transaction that turns the MINT note into the P2ID note, so it
-must be funded with the native asset and topped up as its balance drains. `start` refuses to run
-while the operator holds none of it, and requests are answered with HTTP 503 while its balance is
-too low to cover a transaction.
-
-`init` cannot create a new faucet account on such a chain, since the account would have to pay for
-its own deployment out of an empty vault. Import an existing one with `--import` and
-`--faucet-account-id`.
-
-On devnet the operator is funded at genesis, so no manual funding is needed to get started. The
-faucet account id is the one `miden-validator genesis` prints when the network is bootstrapped:
-
-```bash
-miden-faucet init \
-  --import faucet_operator.mac \
-  --faucet-account-id 0x<faucet_account_id> \
-  --network devnet
-
-miden-faucet start --network devnet --remote-tx-prover-url https://tx-prover.devnet.miden.io
-```
+> [!NOTE]
+> Only public notes are supported. Private notes come back once the funding service can create them.
 
 ## Docker
 
@@ -81,43 +48,20 @@ from the [releases](https://github.com/0xMiden/faucet/releases) page, for exampl
 docker pull ghcr.io/0xmiden/miden-faucet:<version>
 ```
 
-**Data dir:** Store defaults to `/faucet/store.sqlite`. Mount a volume at `/faucet` for persistence.
-
-Run `init` first, then `start`.
-
-**1. Init — new account (testnet):**
-
-```bash
-docker run --rm -v miden-faucet-data:/faucet \
-  -e MIDEN_FAUCET_NETWORK=testnet \
-  -e MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io \
-  -e MIDEN_FAUCET_DECIMALS=6 \
-  ghcr.io/0xmiden/miden-faucet:<version> init
-```
-
-**2. Init — import existing account:**
-
-```bash
-docker run --rm -v miden-faucet-data:/faucet \
-  -e MIDEN_FAUCET_NETWORK=testnet \
-  -e MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io \
-  -e MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH=/faucet/accounts/faucet_operator_miden.mac \
-  -e MIDEN_FAUCET_FAUCET_ACCOUNT_ID=<FAUCET_ACCOUNT_ID> \
-  -v /path/to/your/accounts:/faucet/accounts:ro \
-  ghcr.io/0xmiden/miden-faucet:<version> init
-```
-
-Put `faucet_miden.mac` in your local `./accounts` dir before running.
-
-**3. Start the faucet:**
+**Data dir:** the store holds the API keys and defaults to `/faucet/store.sqlite`. Mount a volume at
+`/faucet` if you use API keys.
 
 ```bash
 docker run --rm -p 8000:8000 -p 8080:8080 \
   -v miden-faucet-data:/faucet \
+  -e MIDEN_FAUCET_NETWORK=testnet \
+  -e MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io \
+  -e MIDEN_FAUCET_FUNDING_SERVICE_URL=http://funding-service:50401 \
+  -e MIDEN_FAUCET_DECIMALS=6 \
   ghcr.io/0xmiden/miden-faucet:<version>
 ```
 
-See `bin/faucet/.env` for all options.
+See the [CLI documentation](https://0xmiden.github.io/faucet/getting-started/cli.html) for all options.
 
 ## Requesting tokens from a live faucet
 
@@ -138,10 +82,8 @@ The faucet implements several security measures to prevent abuse:
   - **Rate limiting**: if an account submitted a challenge, it can't submit another one until the previous one is expired. The challenge lifetime duration is fixed and set when running the faucet.
   - **API Keys**: the faucet is initialized with a set of API Keys that can be distributed to developers. The difficulty of the challenges requested using the API Key will increase only with the load of that key, it won't be influenced by the overall load of the faucet.
 
-- **Requests batching**:
-  - Maximum batch size: 256 requests
-  - Requests are processed in batches to optimize performance
-  - Failed requests within a batch are handled individually
+- **Claim cap**: each request is capped by `--max-claimable-amount`, which the faucet refuses to
+  start with if it is larger than the funding service's own maximum.
 
 ## Contributing
 

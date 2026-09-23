@@ -7,27 +7,21 @@ Get the Miden Faucet running in minutes.
 - Miden Faucet installed (see [Installation](./installation.md))
 - Access to a Miden node (testnet, devnet, or local)
 
-## Step 1: Initialize the Faucet
+## Step 1: Start the Faucet
 
-First, we need to initialize the faucet with a new account that will hold the tokens to be distributed. This command generates a new account with the specified token configuration and saves the account data to a local SQLite store. The account is not yet deployed to the network - that will happen when the faucet is running and the first transaction is sent to the node.
-
-```bash
-miden-faucet init \
-  --token-symbol MIDEN \
-  --decimals 6 \
-  --max-supply 100000000000000000 \
-  --network testnet
-```
-
-## Step 2: Start the Faucet
-
-Next, start the faucet by specifying which network to use. This will start an frontend server to interact with the faucet with an UI and an API server that will handle incoming token requests and manage the minting process.
+The faucet owns no account, so there is nothing to initialize. Point it at a node and at a
+[funding service](https://github.com/0xMiden/node), which holds the chain's native asset and creates
+the notes the faucet hands out.
 
 ```bash
 miden-faucet start \
+  --funding-service-url http://localhost:50401 \
+  --decimals 6 \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ```
+
+## Step 2: Request Test Tokens
 
 ## Step 3: Request Test Tokens
 
@@ -65,56 +59,19 @@ You can also programmatically interact with the REST API to mint tokens. Check o
 
 ### Localhost
 
-If you have a Miden Node running locally, you can run the faucet against that node.
-
 ```bash
-miden-faucet init \
-  --token-symbol MIDEN \
+miden-faucet start \
+  --funding-service-url http://localhost:50401 \
   --decimals 6 \
-  --max-supply 100000000000000000 \
   --network localhost
-
-miden-faucet start --network localhost
-```
-
-### Development
-
-Connect to the node deployed in Miden Devnet. Devnet charges transaction fees
-(`verification_base_fee = 10000`) in its native `MIDEN` asset, which is issued by the genesis network
-faucet. On such a chain a new faucet account cannot be created (it could not pay for its own
-deployment), so the faucet is initialized against the genesis faucet with the operator account file
-that owns it. Its account id is the one `miden-validator genesis` prints when the network is
-bootstrapped:
-
-```bash
-miden-faucet init \
-  --import faucet_operator.mac \
-  --faucet-account-id 0x<faucet_account_id> \
-  --network devnet
-```
-
-The operator account must hold `MIDEN` to pay for its MINT transactions and to prepay the network
-transactions that mint the P2ID notes: on the order of 0.5 MIDEN per request (see
-[CLI configuration](./cli.md#fee-charging-chains)). It is funded at genesis, so no manual funding is
-needed to get started, but it has to be topped up as its balance drains. `start` fails while the
-operator holds none.
-
-```bash
-miden-faucet start --network devnet --remote-tx-prover-url https://tx-prover.devnet.miden.io
 ```
 
 ### Testnet
 
-Connect to the node deployed in Miden Testnet.
-
 ```bash
-miden-faucet init \
-  --token-symbol MIDEN \
-  --decimals 6 \
-  --max-supply 100000000000000000 \
-  --network testnet
-
 miden-faucet start \
+  --funding-service-url http://localhost:50401 \
+  --decimals 6 \
   --explorer-url https://testnet.midenscan.com \
   --network testnet
 ```
@@ -125,6 +82,8 @@ If you only need the API and don't want to serve the web interface:
 
 ```bash
 miden-faucet start \
+  --funding-service-url http://localhost:50401 \
+  --decimals 6 \
   --no-frontend \
   --network testnet
 ```

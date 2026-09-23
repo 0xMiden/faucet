@@ -14,12 +14,12 @@ use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use miden_client::account::{AccountFile, AccountId};
+use miden_client::account::AccountId;
 use miden_client::rpc::Endpoint;
 use miden_client::store::{SettingScope, Store};
 use miden_client_sqlite_store::SqliteStore;
+use miden_faucet_lib::FaucetId;
 use miden_faucet_lib::types::AssetAmount;
-use miden_faucet_lib::{Faucet, FaucetAccount, FaucetConfig, FaucetId};
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::SeedableRng;
 use rand::rngs::ChaCha20Rng;
@@ -48,7 +48,6 @@ const ENV_NETWORK: &str = "MIDEN_FAUCET_NETWORK";
 const ENV_NODE_URL: &str = "MIDEN_FAUCET_NODE_URL";
 const ENV_TIMEOUT: &str = "MIDEN_FAUCET_TIMEOUT";
 const ENV_MAX_CLAIMABLE_AMOUNT: &str = "MIDEN_FAUCET_MAX_CLAIMABLE_AMOUNT";
-const ENV_REMOTE_TX_PROVER_URL: &str = "MIDEN_FAUCET_REMOTE_TX_PROVER_URL";
 const ENV_POW_SECRET: &str = "MIDEN_FAUCET_POW_SECRET";
 const ENV_POW_CHALLENGE_LIFETIME: &str = "MIDEN_FAUCET_POW_CHALLENGE_LIFETIME";
 const ENV_POW_CLEANUP_INTERVAL: &str = "MIDEN_FAUCET_POW_CLEANUP_INTERVAL";
@@ -60,8 +59,6 @@ const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
 const ENV_DECIMALS: &str = "MIDEN_FAUCET_DECIMALS";
 const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
 const ENV_FUNDING_SERVICE_URL: &str = "MIDEN_FAUCET_FUNDING_SERVICE_URL";
-const ENV_IMPORT_OPERATOR_ACCOUNT_PATH: &str = "MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH";
-const ENV_FAUCET_ACCOUNT_ID: &str = "MIDEN_FAUCET_FAUCET_ACCOUNT_ID";
 
 // COMMANDS
 // ================================================================================================
@@ -76,35 +73,6 @@ pub struct Cli {
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub enum Command {
-    /// Initialize the faucet with an existing account.
-    Init {
-        #[clap(flatten)]
-        config: ClientConfig,
-
-        /// Operator account file to use.
-        ///
-        /// Must be paired with `--faucet-account-id`, which identifies the faucet account this
-        /// operator owns.
-        #[arg(
-            long = "import",
-            value_name = "FILE",
-            requires = "faucet_account_id",
-            env = ENV_IMPORT_OPERATOR_ACCOUNT_PATH
-        )]
-        import_operator_account_path: PathBuf,
-
-        /// Account ID of the existing faucet account to use.
-        /// It must be a network account and it must be already deployed.
-        /// Must be paired with `--import`, which supplies the operator account that owns it.
-        #[arg(
-            long = "faucet-account-id",
-            value_name = "ACCOUNT_ID",
-            requires = "import_operator_account_path",
-            env = ENV_FAUCET_ACCOUNT_ID
-        )]
-        faucet_account_id: String,
-    },
-
     /// Manage API keys.
     ApiKey {
         #[command(subcommand)]
@@ -246,10 +214,6 @@ pub struct ClientConfig {
     #[arg(long = "network", value_name = "NETWORK", default_value = "localhost", env = ENV_NETWORK)]
     network: FaucetNetwork,
 
-    /// Endpoint of the remote transaction prover in the format `<protocol>://<host>[:<port>]`.
-    #[arg(long = "remote-tx-prover-url", value_name = "URL", env = ENV_REMOTE_TX_PROVER_URL)]
-    remote_tx_prover_url: Option<Url>,
-
     /// Node RPC gRPC endpoint in the format `http://<host>[:<port>]`. If not set, the url is derived
     /// from the specified network.
     #[arg(long = "node-url", value_name = "URL", env = ENV_NODE_URL)]
@@ -284,56 +248,6 @@ async fn main() -> anyhow::Result<()> {
 async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
     // Note: open-telemetry is handled in main.
     match cli.command {
-        Command::Init {
-            config:
-                ClientConfig {
-                    node_url,
-                    timeout,
-                    remote_tx_prover_url,
-                    network,
-                    store_path,
-                },
-            import_operator_account_path,
-            faucet_account_id,
-        } => {
-            let node_endpoint = parse_node_endpoint(node_url, &network)?;
-
-            let operator_account_data = AccountFile::read(import_operator_account_path)
-                .context("failed to read operator account data from file")?;
-            let operator_secret = operator_account_data
-                .auth_secret_keys
-                .first()
-                .context("auth secret key is required")?
-                .clone();
-            let (faucet_account_id, _) = AccountId::parse(&faucet_account_id)
-                .context("failed to parse faucet account id")?;
-            println!(
-                "Using existing faucet account {} owned by operator account {}",
-                faucet_account_id.to_hex(),
-                operator_account_data.account.id(),
-            );
-            let faucet_account = FaucetAccount::Existing(faucet_account_id);
-            let operator_account = operator_account_data.account;
-
-            let faucet_config = FaucetConfig {
-                store_path,
-                node_endpoint,
-                network_id: network.to_network_id()?,
-                timeout,
-                remote_tx_prover_url,
-            };
-            Box::pin(Faucet::init(
-                &faucet_config,
-                faucet_account,
-                &operator_secret,
-                operator_account,
-            ))
-            .await
-            .context("failed to initialize faucet")?;
-
-            println!("Faucet account successfully initialized");
-        },
-
         Command::ApiKey { command } => match command {
             ApiKeyCommand::Create { store_path } => {
                 let store = SqliteStore::new(store_path).await.context("failed to open store")?;
@@ -369,14 +283,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 
         Command::Start {
             funding_service_url,
-            config:
-                ClientConfig {
-                    node_url,
-                    timeout,
-                    remote_tx_prover_url,
-                    network,
-                    store_path,
-                },
+            config: ClientConfig { node_url, timeout, network, store_path },
             api_bind_port,
             api_public_url,
             no_frontend,
@@ -393,7 +300,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             decimals,
         } => {
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
-            let _ = remote_tx_prover_url;
 
             let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
@@ -567,7 +473,7 @@ mod tests {
     use clap::Parser;
     use clap::error::ErrorKind;
     use fantoccini::ClientBuilder;
-    use miden_client::account::{AccountFile, AccountId};
+    use miden_client::account::AccountId;
     use miden_client::address::{Address, NetworkId};
     use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
     use miden_client_sqlite_store::SqliteStore;
@@ -586,8 +492,6 @@ mod tests {
 
     // CLI TESTS
     // ---------------------------------------------------------------------------------------------
-
-    const TEST_FAUCET_ACCOUNT_ID: &str = "0xf640ba4c3fe40e710eb82764ff48e9";
 
     /// The funding service is the only source of notes, so `start` cannot run without its URL.
     #[test]
@@ -644,81 +548,6 @@ mod tests {
                 .amount()
                 .as_u64(),
             1_000
-        );
-    }
-
-    /// Parses an `init` invocation, with `args` appended to the fixed prefix.
-    fn parse_init(args: &[&str]) -> Result<Cli, clap::Error> {
-        let mut command_args = vec!["miden-faucet", "init"];
-        command_args.extend_from_slice(args);
-        Cli::try_parse_from(command_args)
-    }
-
-    /// `--import` and `--faucet-account-id` are all-or-nothing: each requires the other.
-    #[test]
-    fn init_import_requires_faucet_account_id() {
-        let Err(error) = parse_init(&["--import", "operator.mac"]) else {
-            panic!("--faucet-account-id should be required")
-        };
-        assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
-        assert!(error.to_string().contains("--faucet-account-id"));
-    }
-
-    #[test]
-    fn init_faucet_account_id_requires_import() {
-        let Err(error) = parse_init(&["--faucet-account-id", TEST_FAUCET_ACCOUNT_ID]) else {
-            panic!("--import should be required")
-        };
-        assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
-
-        // Only `--import` is missing. The token metadata must NOT be demanded here: it conflicts
-        // with `--faucet-account-id`, so asking for it would make the request unsatisfiable.
-        let message = error.to_string();
-        assert!(message.contains("--import"), "expected --import in: {message}");
-        for arg in ["--token-symbol", "--decimals", "--max-supply"] {
-            assert!(!message.contains(arg), "did not expect {arg} in: {message}");
-        }
-    }
-
-    /// `--import` and `--faucet-account-id` together take the `FaucetAccount::Existing` path: the
-    /// operator account is read from the file and the faucet account is fetched from the node
-    /// instead of being created.
-    ///
-    /// The stub node serves no accounts, so the run ends at that fetch. Failing there rather than
-    /// earlier is what shows both flags were honoured: the operator file was read, the faucet id
-    /// parsed, and `Existing` chosen over `New`.
-    #[tokio::test]
-    async fn init_with_imported_operator_account() {
-        let stub_node_url = run_stub_node().await;
-        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
-
-        // Write out an operator account file for `--import` to read.
-        let operator_account_path = temp_dir().join(format!("{}.mac", Uuid::new_v4()));
-        let (operator_account, operator_secret) =
-            miden_faucet_lib::create_faucet_operator_account()
-                .expect("failed to create operator account");
-        AccountFile::new(operator_account, vec![operator_secret])
-            .write(&operator_account_path)
-            .expect("failed to write operator account file");
-
-        let result = Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
-            "init",
-            "--import",
-            operator_account_path.to_str().unwrap(),
-            "--faucet-account-id",
-            TEST_FAUCET_ACCOUNT_ID,
-            "--node-url",
-            stub_node_url.to_string().as_str(),
-            "--store",
-            store_path.to_str().unwrap(),
-        ])))
-        .await;
-
-        let error = format!("{:#}", result.expect_err("stub node serves no faucet account"));
-        assert!(
-            error.contains("failed to fetch faucet account"),
-            "expected the faucet account fetch to fail, got: {error}"
         );
     }
 
@@ -918,7 +747,6 @@ mod tests {
             timeout: Duration::from_secs(5),
             network: FaucetNetwork::Localhost,
             store_path: temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())),
-            remote_tx_prover_url: None,
         };
         let api_bind_port = 8000;
         let frontend_url = "http://localhost:8080";
