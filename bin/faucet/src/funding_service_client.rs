@@ -101,7 +101,10 @@ impl FundingServiceClient {
             .await
             .map_or_else(|_| status.to_string(), |body| body.error);
 
-        Err(FundingServiceError::Rejected { status, message })
+        Err(match status {
+            StatusCode::PRECONDITION_FAILED => FundingServiceError::InsufficientFunds(message),
+            _ => FundingServiceError::Rejected { status, message },
+        })
     }
 }
 
@@ -157,6 +160,8 @@ pub enum FundingServiceError {
     TimedOut,
     #[error("the funding service rejected the request: {message}")]
     Rejected { status: StatusCode, message: String },
+    #[error("the funding account does not cover the request: {0}")]
+    InsufficientFunds(String),
     #[error("the funding service returned a malformed response")]
     MalformedResponse,
 }
@@ -176,6 +181,7 @@ impl FundingServiceError {
         let Self::Rejected { status, .. } = self else {
             return match self {
                 Self::TimedOut => StatusCode::GATEWAY_TIMEOUT,
+                Self::InsufficientFunds(_) => StatusCode::SERVICE_UNAVAILABLE,
                 _ => StatusCode::BAD_GATEWAY,
             };
         };
@@ -184,10 +190,7 @@ impl FundingServiceError {
             // A bad account ID, a zero amount, or an amount above the service's cap. The faucet
             // checks its own cap first, so this is a request the user can correct.
             StatusCode::BAD_REQUEST => StatusCode::BAD_REQUEST,
-            // Out of funds, not synchronized yet, too many requests queued, or a transaction that
-            // did not commit. None of these are the user's doing and all of them may clear.
-            StatusCode::PRECONDITION_FAILED
-            | StatusCode::SERVICE_UNAVAILABLE
+            StatusCode::SERVICE_UNAVAILABLE
             | StatusCode::CONFLICT
             | StatusCode::TOO_MANY_REQUESTS => StatusCode::SERVICE_UNAVAILABLE,
             StatusCode::REQUEST_TIMEOUT => StatusCode::GATEWAY_TIMEOUT,
@@ -200,6 +203,11 @@ impl FundingServiceError {
         match self {
             Self::Rejected { status, message } if *status == StatusCode::BAD_REQUEST => {
                 message.clone()
+            },
+            Self::InsufficientFunds(_) => {
+                "The faucet does not have enough funds for this amount. Try a smaller one, or \
+                 try again later."
+                    .to_owned()
             },
             _ => "The faucet is currently unavailable, please try again later.".to_owned(),
         }
@@ -218,7 +226,7 @@ mod tests {
     fn service_errors_map_to_faucet_status_codes() {
         assert_eq!(rejected(StatusCode::BAD_REQUEST).status_code(), StatusCode::BAD_REQUEST);
         assert_eq!(
-            rejected(StatusCode::PRECONDITION_FAILED).status_code(),
+            FundingServiceError::InsufficientFunds(String::new()).status_code(),
             StatusCode::SERVICE_UNAVAILABLE
         );
         assert_eq!(
