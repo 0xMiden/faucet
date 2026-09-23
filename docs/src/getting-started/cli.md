@@ -42,7 +42,7 @@ The Miden Faucet can be configured using:
 | `--network` | Network configuration | `localhost` | No |
 | `--timeout` | Funding service request timeout | `5s` | No |
 | `--max-claimable-amount` | Max claimable base units per request | `1000000000` | No |
-| `--api-keys` | Path to the API keys file | `api_keys.txt` | No |
+| `--file` | Path to the API keys file | `api_keys.txt` | No |
 | `--explorer-url` | Midenscan URL | - | No |
 | `--base-amount` | Token amount (in base units) at which the difficulty of the challenge starts to increase. | `100000000` | No |
 
@@ -148,7 +148,7 @@ Generates a new API key, appends it to the file, and prints it to stdout.
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--api-keys` | Path to the API keys file | `api_keys.txt` | No |
+| `--file` | Path to the API keys file | `api_keys.txt` | No |
 
 ### List API Keys
 
@@ -160,7 +160,7 @@ Lists all API keys in the file.
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--api-keys` | Path to the API keys file | `api_keys.txt` | No |
+| `--file` | Path to the API keys file | `api_keys.txt` | No |
 
 ### Remove an API Key
 
@@ -173,7 +173,7 @@ Removes an API key from the file. Fails if the key is not there.
 | Argument/Option | Description | Default | Required |
 |--------|-------------|---------|----------|
 | `<KEY>` | The API key to remove (encoded string) | - | Yes |
-| `--api-keys` | Path to the API keys file | `api_keys.txt` | No |
+| `--file` | Path to the API keys file | `api_keys.txt` | No |
 
 ### API Key Loading
 

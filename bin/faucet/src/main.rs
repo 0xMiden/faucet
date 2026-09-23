@@ -8,7 +8,7 @@ mod network;
 mod testing;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Context;
@@ -24,7 +24,7 @@ use tokio::task::JoinSet;
 use url::Url;
 
 use crate::api::{ApiServer, Metadata};
-use crate::api_key::{ApiKey, ApiKeys};
+use crate::api_key::ApiKey;
 use crate::frontend::serve_frontend;
 use crate::funding_service_client::FundingServiceClient;
 use crate::logging::OpenTelemetry;
@@ -172,14 +172,14 @@ pub enum ApiKeyCommand {
     /// database so that it is automatically loaded when the faucet starts.
     Create {
         /// Path to the file holding the API keys, one key per line.
-        #[arg(long = "api-keys", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
+        #[arg(long = "file", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
         api_keys_path: PathBuf,
     },
 
     /// Remove an API key from the store.
     Remove {
         /// Path to the file holding the API keys, one key per line.
-        #[arg(long = "api-keys", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
+        #[arg(long = "file", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
         api_keys_path: PathBuf,
 
         /// The API key to remove (encoded string).
@@ -189,7 +189,7 @@ pub enum ApiKeyCommand {
     /// List all API keys in the store.
     List {
         /// Path to the file holding the API keys, one key per line.
-        #[arg(long = "api-keys", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
+        #[arg(long = "file", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
         api_keys_path: PathBuf,
     },
 }
@@ -198,7 +198,7 @@ pub enum ApiKeyCommand {
 #[derive(Parser, Debug, Clone)]
 pub struct ClientConfig {
     /// Path to the file holding the API keys, one key per line.
-    #[arg(long = "api-keys", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
+    #[arg(long = "file", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
     api_keys_path: PathBuf,
 
     /// Timeout for attempting to connect to the node.
@@ -249,7 +249,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 let mut rng = ChaCha20Rng::from_seed(rand::random());
                 let key = ApiKey::generate(&mut rng);
 
-                ApiKeys::add(&api_keys_path, &key).await?;
+                add_api_key_to_file(&api_keys_path, &key).await?;
 
                 println!("{}", key.encode());
             },
@@ -257,13 +257,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             ApiKeyCommand::Remove { api_keys_path, api_key } => {
                 let key = ApiKey::decode(&api_key).context("failed to decode API key")?;
 
-                ApiKeys::remove(&api_keys_path, &key).await?;
+                remove_api_key_from_file(&api_keys_path, &key).await?;
 
                 println!("API key removed");
             },
 
             ApiKeyCommand::List { api_keys_path } => {
-                let encoded_keys = ApiKeys::list(&api_keys_path).await?;
+                let encoded_keys = list_api_keys_from_file(&api_keys_path).await?;
                 if encoded_keys.is_empty() {
                     println!("No API keys found.");
                 } else {
@@ -300,8 +300,9 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
         } => {
             let node_url = parse_node_url(node_url, &network)?;
 
-            let api_keys =
-                ApiKeys::load(&api_keys_path).await.context("failed to load the API keys")?;
+            let api_keys = load_api_keys_from_file(&api_keys_path)
+                .await
+                .context("failed to load the API keys")?;
 
             // The funding service is the only source of notes, so the faucet refuses to serve
             // without it. Its status also bounds what the faucet may hand out.
@@ -396,6 +397,64 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
 // UTILITIES
 // =================================================================================================
 
+/// Loads all API keys from the file at `path`.
+async fn load_api_keys_from_file(path: &Path) -> anyhow::Result<Vec<ApiKey>> {
+    list_api_keys_from_file(path)
+        .await?
+        .iter()
+        .map(|encoded| ApiKey::decode(encoded).map_err(|e| anyhow::anyhow!(e)))
+        .collect()
+}
+
+/// Lists all API keys in the file at `path` as encoded strings.
+async fn list_api_keys_from_file(path: &Path) -> anyhow::Result<Vec<String>> {
+    let contents = tokio::fs::read_to_string(path)
+        .await
+        .with_context(|| format!("failed to read {}", path.display()))?;
+
+    Ok(contents
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(String::from)
+        .collect())
+}
+
+/// Adds a single API key to the file at `path`, creating the file if it does not exist.
+async fn add_api_key_to_file(path: &Path, key: &ApiKey) -> anyhow::Result<()> {
+    // The first key is created before the file exists.
+    let mut keys = if path.exists() {
+        list_api_keys_from_file(path).await?
+    } else {
+        Vec::new()
+    };
+    let encoded = key.encode();
+    if !keys.contains(&encoded) {
+        keys.push(encoded);
+    }
+
+    write_api_keys_to_file(path, &keys).await
+}
+
+/// Removes a single API key from the file at `path`.
+async fn remove_api_key_from_file(path: &Path, key: &ApiKey) -> anyhow::Result<()> {
+    let mut keys = list_api_keys_from_file(path).await?;
+    let encoded = key.encode();
+    let before = keys.len();
+    keys.retain(|existing| existing != &encoded);
+    anyhow::ensure!(keys.len() < before, "API key not found in {}", path.display());
+
+    write_api_keys_to_file(path, &keys).await
+}
+
+async fn write_api_keys_to_file(path: &Path, keys: &[String]) -> anyhow::Result<()> {
+    let mut contents = keys.join("\n");
+    contents.push('\n');
+    tokio::fs::write(path, contents)
+        .await
+        .with_context(|| format!("failed to write {}", path.display()))
+}
+
 /// Parses the node url from the cli arguments. If an explicit url is provided, it is used.
 /// Otherwise, it is derived from the specified network.
 fn parse_node_url(node_url: Option<Url>, network: &FaucetNetwork) -> anyhow::Result<Url> {
@@ -426,13 +485,13 @@ mod tests {
     use miden_protocol::account::AccountId;
     use miden_protocol::address::{Address, NetworkId};
     use miden_protocol::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
+    use rand::SeedableRng;
     use serde_json::{Map, json};
     use tokio::io::AsyncBufReadExt;
     use tokio::net::TcpListener;
     use url::Url;
     use uuid::Uuid;
 
-    use crate::api_key::ApiKeys;
     use crate::funding_service_client::FundingServiceClient;
     use crate::network::FaucetNetwork;
     use crate::testing::stub_funding_service::{STUB_MAX_AMOUNT, serve_stub_funding_service};
@@ -504,48 +563,86 @@ mod tests {
     // ---------------------------------------------------------------------------------------------
 
     #[tokio::test]
-    async fn api_keys_are_created_listed_and_removed() {
-        let api_keys_path = temp_dir().join(format!("{}.keys", Uuid::new_v4()));
-        let path = api_keys_path.to_str().unwrap().to_owned();
+    async fn create_api_key_persists_to_file() {
+        let file_path = temp_dir().join(format!("{}.keys", Uuid::new_v4()));
 
+        // Create an API key via the CLI command.
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "api-key",
+            "create",
+            "--file",
+            file_path.to_str().unwrap(),
+        ])))
+        .await;
+        assert!(result.is_ok());
+
+        // Verify the key is present in the file.
+        let keys = crate::load_api_keys_from_file(&file_path).await.unwrap();
+        assert_eq!(keys.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn list_api_keys_shows_persisted_keys() {
+        let file_path = temp_dir().join(format!("{}.keys", Uuid::new_v4()));
+
+        // Create two API keys.
         for _ in 0..2 {
             Box::pin(run_faucet_command(Cli::parse_from([
                 "miden-faucet",
                 "api-key",
                 "create",
-                "--api-keys",
-                &path,
+                "--file",
+                file_path.to_str().unwrap(),
             ])))
             .await
             .unwrap();
         }
 
-        let keys = ApiKeys::list(&api_keys_path).await.unwrap();
+        // Verify both keys can be loaded.
+        let keys = crate::load_api_keys_from_file(&file_path).await.unwrap();
         assert_eq!(keys.len(), 2);
 
-        Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
-            "api-key",
-            "remove",
-            "--api-keys",
-            &path,
-            &keys[0],
-        ])))
-        .await
-        .unwrap();
-
-        assert_eq!(ApiKeys::list(&api_keys_path).await.unwrap(), vec![keys[1].clone()]);
-
-        // The list command runs against the same file without error.
-        Box::pin(run_faucet_command(Cli::parse_from([
+        // Also verify the list-api-keys command runs without error.
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
             "miden-faucet",
             "api-key",
             "list",
-            "--api-keys",
-            &path,
+            "--file",
+            file_path.to_str().unwrap(),
         ])))
-        .await
-        .unwrap();
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn remove_api_key_deletes_from_file() {
+        let file_path = temp_dir().join(format!("{}.keys", Uuid::new_v4()));
+
+        // Create an API key.
+        let mut rng = rand::rngs::ChaCha20Rng::from_seed(rand::random());
+        let key = crate::api_key::ApiKey::generate(&mut rng);
+        crate::add_api_key_to_file(&file_path, &key).await.unwrap();
+
+        // Verify the key exists.
+        let keys = crate::load_api_keys_from_file(&file_path).await.unwrap();
+        assert_eq!(keys.len(), 1);
+
+        // Remove the key via the CLI command.
+        let result = Box::pin(run_faucet_command(Cli::parse_from([
+            "miden-faucet",
+            "api-key",
+            "remove",
+            "--file",
+            file_path.to_str().unwrap(),
+            &key.encode(),
+        ])))
+        .await;
+        assert!(result.is_ok());
+
+        // Verify the key was removed.
+        let keys = crate::load_api_keys_from_file(&file_path).await.unwrap();
+        assert!(keys.is_empty());
     }
 
     // INTEGRATION TEST

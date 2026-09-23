@@ -1,6 +1,3 @@
-use std::path::Path;
-
-use anyhow::Context;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use miden_pow_rate_limiter::ChallengeError;
@@ -56,78 +53,11 @@ impl From<ApiKey> for [u8; 32] {
     }
 }
 
-// API KEYS
-// ================================================================================================
-
-/// The API keys stored in a newline-delimited file of encoded keys.
-///
-/// Holds no state: the file path is passed to each operation.
-pub struct ApiKeys;
-
-impl ApiKeys {
-    /// Reads the encoded API keys from `path`, which must exist.
-    pub async fn list(path: &Path) -> anyhow::Result<Vec<String>> {
-        let contents = tokio::fs::read_to_string(path)
-            .await
-            .with_context(|| format!("failed to read {}", path.display()))?;
-
-        Ok(contents
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .map(String::from)
-            .collect())
-    }
-
-    /// Reads and decodes the API keys from `path`, which must exist.
-    pub async fn load(path: &Path) -> anyhow::Result<Vec<ApiKey>> {
-        Self::list(path)
-            .await?
-            .iter()
-            .map(|encoded| ApiKey::decode(encoded).map_err(|error| anyhow::anyhow!(error)))
-            .collect()
-    }
-
-    /// Adds `key` to the file at `path`, creating it if it does not exist.
-    pub async fn add(path: &Path, key: &ApiKey) -> anyhow::Result<()> {
-        // The first key is created before the file exists.
-        let mut keys = if path.exists() { Self::list(path).await? } else { Vec::new() };
-        let encoded = key.encode();
-        if !keys.contains(&encoded) {
-            keys.push(encoded);
-        }
-
-        Self::write(path, &keys).await
-    }
-
-    /// Removes `key` from the file at `path`.
-    ///
-    /// Fails if the key is not present, so a typo does not report a successful removal.
-    pub async fn remove(path: &Path, key: &ApiKey) -> anyhow::Result<()> {
-        let mut keys = Self::list(path).await?;
-        let encoded = key.encode();
-        let before = keys.len();
-        keys.retain(|existing| existing != &encoded);
-        anyhow::ensure!(keys.len() < before, "API key not found in {}", path.display());
-
-        Self::write(path, &keys).await
-    }
-
-    async fn write(path: &Path, keys: &[String]) -> anyhow::Result<()> {
-        let mut contents = keys.join("\n");
-        contents.push('\n');
-        tokio::fs::write(path, contents)
-            .await
-            .with_context(|| format!("failed to write {}", path.display()))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use rand::SeedableRng;
     use rand::rngs::ChaCha20Rng;
 
-    use super::*;
     use crate::api_key::{API_KEY_PREFIX, ApiKey};
 
     #[test]
@@ -141,26 +71,5 @@ mod tests {
         let decoded_key = ApiKey::decode(&encoded_key).unwrap();
         assert_eq!(decoded_key.0.len(), 32);
         assert_eq!(decoded_key.0, api_key.0);
-    }
-
-    /// A round trip through the file: added keys are read back, a removed key is gone, and
-    /// removing a key that is not there fails.
-    #[tokio::test]
-    async fn api_keys_round_trip_through_the_file() {
-        let path = std::env::temp_dir().join(format!("{}.keys", uuid::Uuid::new_v4()));
-        let mut rng = ChaCha20Rng::from_seed(rand::random());
-        let first = ApiKey::generate(&mut rng);
-        let second = ApiKey::generate(&mut rng);
-
-        ApiKeys::load(&path).await.expect_err("a missing file should fail to load");
-
-        ApiKeys::add(&path, &first).await.unwrap();
-        ApiKeys::add(&path, &second).await.unwrap();
-        assert_eq!(ApiKeys::load(&path).await.unwrap(), vec![first.clone(), second.clone()]);
-
-        ApiKeys::remove(&path, &first).await.unwrap();
-        assert_eq!(ApiKeys::load(&path).await.unwrap(), vec![second.clone()]);
-
-        ApiKeys::remove(&path, &first).await.expect_err("removing an absent key should fail");
     }
 }
