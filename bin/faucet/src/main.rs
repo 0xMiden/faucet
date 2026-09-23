@@ -875,7 +875,7 @@ mod tests {
 
         // Click the public note button
         client
-            .find(fantoccini::Locator::Css("#send-public-button"))
+            .find(fantoccini::Locator::Css("#send-button"))
             .await
             .unwrap()
             .click()
