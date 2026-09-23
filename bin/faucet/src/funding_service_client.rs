@@ -4,7 +4,8 @@
 //! request. It waits until the note is committed before answering, so a successful response
 //! describes a note that already exists on chain.
 
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use axum::http::StatusCode;
@@ -28,11 +29,17 @@ use crate::COMPONENT;
 /// past which it answers 408; the faucet waits up to 1 minute.
 const REQUEST_FUNDS_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// How long a `/status` response is reused before the service is asked again.
+const STATUS_CACHE_LIFETIME: Duration = Duration::from_secs(20);
+
 /// Client for the funding service's JSON HTTP API.
 #[derive(Clone)]
 pub struct FundingServiceClient {
     client: reqwest::Client,
     url: Url,
+    /// The last successful status read and when it was read. Shared between clones so they answer
+    /// from the same cache.
+    status_cache: Arc<Mutex<Option<(Instant, FundingServiceStatus)>>>,
 }
 
 impl FundingServiceClient {
@@ -44,11 +51,20 @@ impl FundingServiceClient {
             .build()
             .context("failed to build the funding service HTTP client")?;
 
-        Ok(Self { client, url })
+        Ok(Self {
+            client,
+            url,
+            status_cache: Arc::default(),
+        })
     }
 
-    /// Reads the funding service's status.
+    /// Reads the funding service's status, reusing a response younger than
+    /// [`STATUS_CACHE_LIFETIME`]. Failures are not cached.
     pub async fn status(&self) -> Result<FundingServiceStatus, FundingServiceError> {
+        if let Some(status) = self.cached_status() {
+            return Ok(status);
+        }
+
         let response = self
             .client
             .get(self.endpoint("status"))
@@ -56,7 +72,25 @@ impl FundingServiceClient {
             .await
             .map_err(FundingServiceError::from_transport)?;
 
-        Self::parse(response).await
+        let status: FundingServiceStatus = Self::parse(response).await?;
+        *self.lock_status_cache() = Some((Instant::now(), status.clone()));
+
+        Ok(status)
+    }
+
+    /// The last status read, while it is younger than [`STATUS_CACHE_LIFETIME`].
+    fn cached_status(&self) -> Option<FundingServiceStatus> {
+        let cache = self.lock_status_cache();
+        let (read_at, status) = cache.as_ref()?;
+
+        (read_at.elapsed() < STATUS_CACHE_LIFETIME).then(|| status.clone())
+    }
+
+    /// Nothing panics while the cache is locked, so the lock cannot be poisoned.
+    fn lock_status_cache(
+        &self,
+    ) -> std::sync::MutexGuard<'_, Option<(Instant, FundingServiceStatus)>> {
+        self.status_cache.lock().expect("the status cache lock was poisoned")
     }
 
     /// Requests a public P2ID note holding `amount` base units of the native asset and targeting
@@ -216,7 +250,54 @@ impl FundingServiceError {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    use axum::routing::get;
+    use axum::{Json, Router};
+    use tokio::net::TcpListener;
+
     use super::*;
+
+    /// Serves a status whose balance grows on every call, so a repeated read shows whether the
+    /// answer came from the cache.
+    async fn serve_counting_status() -> Url {
+        static READS: AtomicU64 = AtomicU64::new(0);
+
+        let status = || async {
+            Json(serde_json::json!({
+                "version": "0.0.0-stub",
+                "account_id": "0x0",
+                "balance": READS.fetch_add(1, Ordering::Relaxed),
+                "max_amount": 0,
+            }))
+        };
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = Url::parse(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
+        let app = Router::new().route("/status", get(status));
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+        url
+    }
+
+    #[tokio::test]
+    async fn the_status_is_read_once_per_cache_lifetime() {
+        let client =
+            FundingServiceClient::new(serve_counting_status().await, Duration::from_secs(5))
+                .unwrap();
+
+        let first = client.status().await.unwrap().balance;
+        assert_eq!(client.status().await.unwrap().balance, first, "the second read is cached");
+
+        // Age the cached entry past its lifetime instead of waiting for it to expire.
+        {
+            let mut cache = client.lock_status_cache();
+            let (read_at, _) = cache.as_mut().expect("the first read filled the cache");
+            *read_at = read_at.checked_sub(STATUS_CACHE_LIFETIME).expect("the clock is old enough");
+        }
+
+        assert_ne!(client.status().await.unwrap().balance, first, "an expired entry is read again");
+    }
 
     fn rejected(status: StatusCode) -> FundingServiceError {
         FundingServiceError::Rejected { status, message: "nope".to_owned() }
