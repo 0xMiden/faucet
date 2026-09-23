@@ -996,9 +996,9 @@ mod tests {
             .await
             .unwrap();
 
-        // Click the public note button
+        // Click the send button
         client
-            .find(fantoccini::Locator::Css("#send-public-button"))
+            .find(fantoccini::Locator::Css("#send-button"))
             .await
             .unwrap()
             .click()
