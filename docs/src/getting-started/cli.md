@@ -118,11 +118,9 @@ All configuration options can be set using environment variables:
 # Faucet Account Configuration
 export MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH=operator.mac
 export MIDEN_FAUCET_FAUCET_ACCOUNT_ID=
-export MIDEN_FAUCET_TOKEN_SYMBOL=
-export MIDEN_FAUCET_DECIMALS=
-export MIDEN_FAUCET_MAX_SUPPLY=
 
 # Faucet Service Configuration
+export MIDEN_FAUCET_DECIMALS=6
 export MIDEN_FAUCET_API_BIND_PORT=8000
 export MIDEN_FAUCET_FRONTEND_BIND_PORT=8080
 export MIDEN_FAUCET_NO_FRONTEND=false
@@ -132,6 +130,7 @@ export MIDEN_FAUCET_ENABLE_OTEL=true
 export MIDEN_FAUCET_BASE_AMOUNT=100000000
 
 # Network & Node Configuration
+export MIDEN_FAUCET_FUNDING_SERVICE_URL=http://localhost:50401
 export MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io
 export MIDEN_FAUCET_NETWORK=testnet
 export MIDEN_FAUCET_TIMEOUT=10s
@@ -140,7 +139,6 @@ export MIDEN_FAUCET_EXPLORER_URL=https://testnet.midenscan.com
 # Faucet Client Configuration
 export MIDEN_FAUCET_STORE=faucet_client_store.sqlite3
 export MIDEN_FAUCET_REMOTE_TX_PROVER_URL=https://tx-prover.devnet.miden.io
-export MIDEN_FAUCET_BATCH_SIZE=32
 
 # Rate Limiting Configuration
 export MIDEN_FAUCET_POW_SECRET=your-secret-here
