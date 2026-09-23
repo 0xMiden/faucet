@@ -382,7 +382,7 @@ body {
 /* Primary action */
 .cta {
     width: 100%;
-    margin-top: 24px;
+    margin-top: 16px;
     border: none;
     cursor: pointer;
     background-color: var(--orange);
