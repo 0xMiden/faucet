@@ -172,14 +172,14 @@ pub enum ApiKeyCommand {
     /// database so that it is automatically loaded when the faucet starts.
     Create {
         /// Path to the file holding the API keys, one key per line.
-        #[arg(long = "file", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
+        #[arg(long = "api-keys-file", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
         api_keys_path: PathBuf,
     },
 
     /// Remove an API key from the store.
     Remove {
         /// Path to the file holding the API keys, one key per line.
-        #[arg(long = "file", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
+        #[arg(long = "api-keys-file", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
         api_keys_path: PathBuf,
 
         /// The API key to remove (encoded string).
@@ -189,7 +189,7 @@ pub enum ApiKeyCommand {
     /// List all API keys in the store.
     List {
         /// Path to the file holding the API keys, one key per line.
-        #[arg(long = "file", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
+        #[arg(long = "api-keys-file", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
         api_keys_path: PathBuf,
     },
 }
@@ -198,7 +198,7 @@ pub enum ApiKeyCommand {
 #[derive(Parser, Debug, Clone)]
 pub struct FaucetConfig {
     /// Path to the file holding the API keys, one key per line.
-    #[arg(long = "file", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
+    #[arg(long = "api-keys-file", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
     api_keys_path: PathBuf,
 
     /// Timeout for attempting to connect to the node.
@@ -571,7 +571,7 @@ mod tests {
             "miden-faucet",
             "api-key",
             "create",
-            "--file",
+            "--api-keys-file",
             file_path.to_str().unwrap(),
         ])))
         .await;
@@ -592,7 +592,7 @@ mod tests {
                 "miden-faucet",
                 "api-key",
                 "create",
-                "--file",
+                "--api-keys-file",
                 file_path.to_str().unwrap(),
             ])))
             .await
@@ -608,7 +608,7 @@ mod tests {
             "miden-faucet",
             "api-key",
             "list",
-            "--file",
+            "--api-keys-file",
             file_path.to_str().unwrap(),
         ])))
         .await;
@@ -633,7 +633,7 @@ mod tests {
             "miden-faucet",
             "api-key",
             "remove",
-            "--file",
+            "--api-keys-file",
             file_path.to_str().unwrap(),
             &key.encode(),
         ])))
