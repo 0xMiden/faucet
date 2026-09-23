@@ -13,10 +13,9 @@ The faucet comes with two CLI tools:
 - **miden-faucet-client**: Used for interacting with a live faucet, i.e. for requesting tokens from a running faucet.
 
 The faucet owns no account and submits no transactions. It validates requests and forwards them to a
-[funding service](https://github.com/0xMiden/node), which holds the chain's native asset, creates a
-public P2ID note per request and waits until the note is committed before answering. The faucet is
-the gatekeeper in front of it: the funding service has no authentication or rate limiting of its
-own, so only the faucet should be able to reach it.
+[funding service](https://github.com/0xMiden/node), which holds the chain's native asset and creates
+a public P2ID note per request. The faucet is the gatekeeper in front of it: the funding service has
+no authentication or rate limiting of its own, so only the faucet should be able to reach it.
 
 1. Install both faucet binaries:
 ```bash

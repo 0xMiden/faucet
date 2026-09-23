@@ -45,7 +45,7 @@ The high-level structure of the project looks like follows:
 ### 5. Funding service
 - **Purpose**: Holds the chain's native asset and creates the notes
 - **Features**:
-  - Creates a public P2ID note per request and waits until it is committed
+  - Creates a public P2ID note per request and queues it for the next funding transaction
   - Reports its account, balance and per-request maximum through `/status`
 
 The faucet owns no account and submits no transactions. It is the gatekeeper in front of the funding
@@ -75,8 +75,7 @@ The basic HTTP requests for minting tokens involves `/pow` and `/get_tokens`. Th
 
 - **Token Distribution**
    - Validated request forwarded to the funding service
-   - The funding service creates a public P2ID note and submits its transaction
-   - The funding service answers once the note is committed in a block
+   - The funding service creates a public P2ID note addressed to the recipient
 
 - **Response**
    - Transaction ID and Note ID returned
