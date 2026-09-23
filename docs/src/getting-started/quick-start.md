@@ -9,9 +9,7 @@ Get the Miden Faucet running in minutes.
 
 ## Step 1: Start the Faucet
 
-The faucet owns no account, so there is nothing to initialize. Point it at a node and at a
-[funding service](https://github.com/0xMiden/node), which holds the chain's native asset and creates
-the notes the faucet hands out.
+Start the faucet by specifying the URL of the funding service, the network, the token decimals, and optionally the explorer URL. This will start a frontend server to interact with the faucet with an UI and an API server that will handle incoming token requests and forward the requests to the funding service.
 
 ```bash
 miden-faucet start \
@@ -22,8 +20,6 @@ miden-faucet start \
 ```
 
 ## Step 2: Request Test Tokens
-
-## Step 3: Request Test Tokens
 
 Once the faucet is running, you can request test tokens through either the web interface, the client CLI, or the REST API.
 
@@ -64,16 +60,6 @@ miden-faucet start \
   --funding-service-url http://localhost:50401 \
   --decimals 6 \
   --network localhost
-```
-
-### Testnet
-
-```bash
-miden-faucet start \
-  --funding-service-url http://localhost:50401 \
-  --decimals 6 \
-  --explorer-url https://testnet.midenscan.com \
-  --network testnet
 ```
 
 ### Faucet API Only (No Frontend)
