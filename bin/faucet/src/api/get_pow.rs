@@ -5,6 +5,7 @@ use http::StatusCode;
 use miden_faucet_lib::requests::{GetPowResponse, PowQueryParams};
 use miden_protocol::account::AccountId;
 use miden_protocol::address::{Address, AddressId};
+use miden_protocol::utils::ToHex;
 use tracing::{info_span, instrument};
 
 use crate::COMPONENT;
@@ -41,7 +42,7 @@ pub async fn get_pow(
     };
 
     Ok(Json(GetPowResponse {
-        challenge: hex::encode(challenge.to_bytes()),
+        challenge: challenge.to_bytes().to_hex(),
         target: challenge.target(),
         timestamp: challenge.timestamp(),
     }))
