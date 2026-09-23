@@ -55,6 +55,8 @@ You can also programmatically interact with the REST API to mint tokens. Check o
 
 ### Localhost
 
+If you have a Miden Node and a funding service instance running locally, you can run the faucet against them.
+
 ```bash
 miden-faucet start \
   --funding-service-url http://localhost:50401 \
