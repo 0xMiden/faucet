@@ -66,7 +66,7 @@ uuid            = { workspace = true }
 # (so the dependency only lies in the protobuf interface).
 [build-dependencies]
 brotli                 = { version = "8" }
-miden-node-proto-build = { version = "=0.17.0-rc.1" }
+miden-node-proto-build = { version = "=0.17.0-rc.2" }
 tonic-prost-build      = { version = "0.14" }
 
 # Required to avoid false positives in cargo-machete
