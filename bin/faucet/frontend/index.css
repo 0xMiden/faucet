@@ -31,6 +31,8 @@
     --orange-soft: rgba(230, 83, 3, 0.12);
     --green: #7E9A72;
     --green-soft: rgba(126, 154, 114, 0.14);
+    --danger: #D92D20;
+    --danger-soft: rgba(217, 45, 32, 0.1);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     --column: 677px;
 }
@@ -51,6 +53,8 @@
         --orange-soft: rgba(240, 99, 26, 0.16);
         --green: #8FAE82;
         --green-soft: rgba(143, 174, 130, 0.18);
+        --danger: #F0705F;
+        --danger-soft: rgba(240, 112, 95, 0.16);
         --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
     }
 }
@@ -424,12 +428,26 @@ body {
     margin-top: 22px;
     padding: 12px 16px;
     border-radius: 12px;
-    background-color: #FFE8E9;
-    border: 1px solid rgba(224, 96, 60, 0.25);
-    color: #484848;
+    background-color: var(--danger-soft);
+    border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+    color: var(--ink);
     font-size: 14px;
     text-align: center;
     white-space: pre-wrap;
+}
+
+.error-message svg {
+    color: var(--danger);
+}
+
+/* Non-error notice (e.g. still loading) */
+.error-message.pending {
+    background-color: var(--orange-soft);
+    border-color: color-mix(in srgb, var(--orange) 25%, transparent);
+}
+
+.error-message.pending svg {
+    color: var(--orange);
 }
 
 .error-header {
@@ -439,14 +457,14 @@ body {
 }
 
 .error-title {
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 400;
 }
 
 .error-description {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 400;
-    background-color: rgba(255, 255, 255, 0.7);
+    background-color: color-mix(in srgb, var(--card) 70%, transparent);
     border-radius: 8px;
     padding: 5px 15px;
 }
