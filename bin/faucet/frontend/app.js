@@ -147,6 +147,11 @@ export class MidenFaucetApp {
             await this.pollNote(getTokensResponse.note_id);
 
             this.ui.showCompletedPublicModal(recipient, amountAsTokens, getTokensResponse.tx_id);
+
+            // The funding account just paid out, so refresh what it has left.
+            this.fetchMetadata().catch((error) => {
+                console.warn('Could not refresh the remaining funds:', error);
+            });
         } catch (error) {
             this.ui.hideMintingModal();
             this.handleApiError(error, 'Request failed', error.message);
@@ -168,6 +173,7 @@ export class MidenFaucetApp {
         this.decimals = data.decimals;
         this.powLoadDifficulty = data.pow_load_difficulty;
         this.baseAmount = data.base_amount;
+        this.ui.setRemainingFunds(data.balance, data.decimals);
 
         if (!this.metadataInitialized) {
             this.metadataInitialized = true;

@@ -8,6 +8,8 @@ export class UIController {
         this.walletConnectButton = document.getElementById('wallet-connect-button');
         this.faucetAddress = document.getElementById('faucet-address');
         this.faucetAddressLoader = document.getElementById('faucet-address-loader');
+        this.remainingFunds = document.getElementById('remaining-funds');
+        this.remainingFundsLoader = document.getElementById('remaining-funds-loader');
         this.tokenAmountHint = document.getElementById('token-amount-hint');
         this.explorerUrl = null;
     }
@@ -201,6 +203,14 @@ export class UIController {
         this.faucetAddress.hidden = false;
     }
 
+    /// The funding service reports no balance when it cannot be reached, which shows as "-".
+    setRemainingFunds(balance, decimals) {
+        this.remainingFunds.textContent =
+            balance == null ? '-' : Utils.baseUnitsToTokens(balance, decimals);
+        this.remainingFundsLoader.hidden = true;
+        this.remainingFunds.hidden = false;
+    }
+
     setExplorerUrl(url) {
         this.explorerUrl = url;
     }
@@ -209,6 +219,8 @@ export class UIController {
     showFooterPlaceholders() {
         this.faucetAddressLoader.hidden = true;
         this.faucetAddress.hidden = false;
+        this.remainingFundsLoader.hidden = true;
+        this.remainingFunds.hidden = false;
         // The token select is still showing its "Loading…" placeholder if the options never came.
         if (this.tokenSelect.disabled && this.tokenSelect.options.length > 0) {
             this.tokenSelect.options[0].textContent = '-';
