@@ -903,8 +903,7 @@ mod tests {
     // TESTING HELPERS
     // ---------------------------------------------------------------------------------------------
 
-    /// Starts a faucet against the given stubs and returns its frontend URL. No `init` is needed:
-    /// `start` reads the token metadata from its flags and the notes from the funding service.
+    /// Starts a faucet against the given stubs and returns its frontend URL.
     fn run_faucet_server(stub_node_url: Url, funding_service_url: Url) -> String {
         let config = ClientConfig {
             node_url: Some(stub_node_url),
@@ -914,14 +913,16 @@ mod tests {
             remote_tx_prover_url: None,
         };
         let api_bind_port = 8000;
+        let frontend_url = "http://localhost:8080";
 
-        // Use std::thread to launch the faucet - avoids Send requirements.
+        // Use std::thread to launch faucet - avoids Send requirements
         std::thread::spawn(move || {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
-                .expect("failed to build runtime");
+                .expect("Failed to build runtime");
 
+            // Run the faucet on this thread's runtime
             rt.block_on(async {
                 Box::pin(run_faucet_command(Cli {
                     command: crate::Command::Start {
@@ -949,7 +950,7 @@ mod tests {
             });
         });
 
-        "http://localhost:8080".to_string()
+        frontend_url.to_string()
     }
 
     async fn start_fantoccini_client() -> fantoccini::Client {
