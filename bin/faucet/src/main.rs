@@ -78,7 +78,7 @@ pub enum Command {
     /// Start the faucet server
     Start {
         #[clap(flatten)]
-        config: ClientConfig,
+        config: FaucetConfig,
 
         /// Base URL of the funding service that emits the notes.
         #[arg(long = "funding-service-url", value_name = "URL", env = ENV_FUNDING_SERVICE_URL)]
@@ -194,9 +194,9 @@ pub enum ApiKeyCommand {
     },
 }
 
-/// Configuration for the faucet client.
+/// Configuration for the faucet.
 #[derive(Parser, Debug, Clone)]
-pub struct ClientConfig {
+pub struct FaucetConfig {
     /// Path to the file holding the API keys, one key per line.
     #[arg(long = "file", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
     api_keys_path: PathBuf,
@@ -277,7 +277,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
         Command::Start {
             funding_service_url,
             config:
-                ClientConfig {
+                FaucetConfig {
                     node_url,
                     timeout,
                     network,
@@ -496,7 +496,7 @@ mod tests {
     use crate::network::FaucetNetwork;
     use crate::testing::stub_funding_service::{STUB_MAX_AMOUNT, serve_stub_funding_service};
     use crate::testing::stub_rpc_api::serve_stub;
-    use crate::{Cli, ClientConfig, run_faucet_command};
+    use crate::{Cli, FaucetConfig, run_faucet_command};
 
     // CLI TESTS
     // ---------------------------------------------------------------------------------------------
@@ -747,7 +747,7 @@ mod tests {
         let api_keys_path = temp_dir().join(format!("{}.keys", Uuid::new_v4()));
         std::fs::write(&api_keys_path, "").unwrap();
 
-        let config = ClientConfig {
+        let config = FaucetConfig {
             node_url: Some(stub_node_url),
             timeout: Duration::from_secs(5),
             network: FaucetNetwork::Localhost,
