@@ -171,14 +171,14 @@ pub enum ApiKeyCommand {
     /// Prints out the generated API key to stdout. The key is also stored in the faucet's
     /// database so that it is automatically loaded when the faucet starts.
     Create {
-        /// Path to the file holding the API keys, one encoded key per line.
+        /// Path to the file holding the API keys, one key per line.
         #[arg(long = "api-keys", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
         api_keys_path: PathBuf,
     },
 
     /// Remove an API key from the store.
     Remove {
-        /// Path to the file holding the API keys, one encoded key per line.
+        /// Path to the file holding the API keys, one key per line.
         #[arg(long = "api-keys", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
         api_keys_path: PathBuf,
 
@@ -188,7 +188,7 @@ pub enum ApiKeyCommand {
 
     /// List all API keys in the store.
     List {
-        /// Path to the file holding the API keys, one encoded key per line.
+        /// Path to the file holding the API keys, one key per line.
         #[arg(long = "api-keys", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
         api_keys_path: PathBuf,
     },
@@ -197,7 +197,7 @@ pub enum ApiKeyCommand {
 /// Configuration for the faucet client.
 #[derive(Parser, Debug, Clone)]
 pub struct ClientConfig {
-    /// Path to the file holding the API keys, one encoded key per line.
+    /// Path to the file holding the API keys, one key per line.
     #[arg(long = "api-keys", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
     api_keys_path: PathBuf,
 
