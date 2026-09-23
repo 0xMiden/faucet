@@ -17,8 +17,6 @@ The faucet comes with two CLI tools:
 | `api-key list` | List all API keys in the API keys file |
 | `help` | Show help information |
 
-The faucet owns no account, so there is no `init` step.
-
 ## Configuration Methods
 
 The Miden Faucet can be configured using:
