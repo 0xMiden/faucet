@@ -16,7 +16,7 @@
             <img src="header.webp" alt="Miden Faucet" class="hero-image" width="1714" height="341" fetchpriority="high">
         </header>
 
-        <main class="stage" id="stage" data-note-type="private">
+        <main class="stage" id="stage">
             <div class="col">
                 <!-- Request form. Hidden while one of the status views below is active. -->
                 <section class="view form-view" id="form-view">
@@ -51,19 +51,6 @@
                         </span>
                     </div>
                     <p class="field-hint" id="token-amount-hint"></p>
-
-                    <div class="segmented" role="tablist" aria-label="Note visibility">
-                        <span class="thumb" aria-hidden="true"></span>
-                        <button type="button" role="tab" id="tab-public" aria-selected="false">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2" /><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12Z" /></svg>
-                            Public
-                        </button>
-                        <button type="button" role="tab" id="tab-private" aria-selected="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="9.5" rx="2.4" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></svg>
-                            Private
-                        </button>
-                    </div>
-                    <p class="note-type-note" id="note-type-note">Private note data is not visible on-chain.</p>
 
                     <div class="error-message" id="home-error-message">
                         <div class="error-header">
@@ -106,7 +93,8 @@
                         <span id="home-error-message-description" class="error-description"></span>
                     </div>
 
-                    <button type="button" class="cta" id="send-button"><span id="send-button-label">Send private note</span></button>
+                    <button type="button" class="cta" id="send-button" disabled><span id="send-button-label">Send tokens</span></button>
+                    <p class="note-type-note">All token interactions are private by default.</p>
                 </section>
 
                 <!-- Minting in progress -->

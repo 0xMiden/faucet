@@ -369,62 +369,6 @@ body {
     min-height: 1.5em;
 }
 
-/* Public / private toggle */
-.segmented {
-    position: relative;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
-    background-color: var(--field-2);
-    border-radius: 12px;
-    padding: 5px;
-    margin-top: 20px;
-}
-
-.segmented .thumb {
-    position: absolute;
-    top: 5px;
-    bottom: 5px;
-    left: 5px;
-    width: calc(50% - 8px);
-    background-color: var(--orange);
-    border-radius: 9px;
-    box-shadow: 0 6px 16px -4px color-mix(in srgb, var(--orange) 55%, transparent);
-    transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.stage[data-note-type="private"] .segmented .thumb {
-    transform: translateX(calc(100% + 6px));
-}
-
-.segmented button {
-    position: relative;
-    z-index: 1;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    font-family: "Seasonmix", Georgia, serif;
-    font-weight: 600;
-    font-size: 16px;
-    color: var(--muted);
-    padding: 12px 8px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    transition: color 0.28s;
-}
-
-.segmented button svg {
-    width: 17px;
-    height: 17px;
-}
-
-.segmented button[aria-selected="true"] {
-    color: #fff;
-}
-
 .note-type-note {
     text-align: center;
     font-weight: 400;
@@ -854,10 +798,6 @@ body {
         margin-top: 16px;
     }
 
-    .segmented button {
-        font-size: 15px;
-    }
-
     .meta-chips {
         padding-left: 14px;
         padding-right: 14px;
@@ -882,7 +822,6 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
     .view,
-    .segmented .thumb,
     .cta,
     .line-button,
     .pill-button {

@@ -4,12 +4,8 @@ export class UIController {
     constructor() {
         this.recipientInput = document.getElementById('recipient-address');
         this.tokenSelect = document.getElementById('token-amount');
-        this.stage = document.getElementById('stage');
-        this.publicTab = document.getElementById('tab-public');
-        this.privateTab = document.getElementById('tab-private');
-        this.noteTypeNote = document.getElementById('note-type-note');
         this.sendButton = document.getElementById('send-button');
-        this.sendButtonLabel = document.getElementById('send-button-label');
+        // Notes are always private; the API still takes the flag.
         this.isPrivateNote = true;
         this.walletConnectButton = document.getElementById('wallet-connect-button');
         this.faucetAddress = document.getElementById('faucet-address');
@@ -24,8 +20,6 @@ export class UIController {
     }
 
     setupEventListeners(onSendTokens, onWalletConnect, onTokenSelect) {
-        this.publicTab.addEventListener('click', () => this.setNoteType(false));
-        this.privateTab.addEventListener('click', () => this.setNoteType(true));
         this.sendButton.addEventListener('click', () => onSendTokens(this.isPrivateNote));
         this.walletConnectButton.addEventListener('click', onWalletConnect);
         this.tokenSelect.addEventListener('change', (event) => onTokenSelect(event.target.value));
@@ -36,18 +30,6 @@ export class UIController {
     // The send button stays inactive until the recipient field holds a valid address.
     syncSendButton() {
         this.sendButton.disabled = !Utils.validateAddress(this.recipientInput.value.trim());
-    }
-
-    // Switches the public / private toggle. The send button label and the note under the toggle follow it.
-    setNoteType(isPrivateNote) {
-        this.isPrivateNote = isPrivateNote;
-        this.stage.dataset.noteType = isPrivateNote ? 'private' : 'public';
-        this.publicTab.setAttribute('aria-selected', String(!isPrivateNote));
-        this.privateTab.setAttribute('aria-selected', String(isPrivateNote));
-        this.sendButtonLabel.textContent = isPrivateNote ? 'Send private note' : 'Send public note';
-        this.noteTypeNote.textContent = isPrivateNote
-            ? 'Private note data is not visible on-chain.'
-            : 'The note and its amount are visible to anyone on-chain.';
     }
 
     getFormData() {
