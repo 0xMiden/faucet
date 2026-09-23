@@ -3,8 +3,6 @@
 ## 0.17.0 (TBD)
 
 - Redesigned the faucet frontend: new hero illustration and typography, a single send button (notes are always public), inline minting and result views, a stats card for issuance and the faucet address, dark mode, and the Bread wallet logo on the connect button ([#306](https://github.com/0xMiden/faucet/pull/306) ([#312](https://github.com/0xMiden/faucet/pull/312))).
-- [BREAKING] Removed the `init` command and the faucet account it created, along with the `--store` flag: nothing reads that account now that requests go to the funding service. The API keys moved to a newline-delimited file, configured with `--file` / `MIDEN_FAUCET_API_KEYS`.
-- Removed the `miden-client` and `miden-client-sqlite-store` dependencies from the backend, which now uses `miden-protocol` directly.
 - [BREAKING] Removed the `init` command. The faucet now requires no initialization and can be started just with the `start` command ([#310](https://github.com/0xMiden/faucet/pull/310)).
 - Removed the `miden-client` and `miden-client-sqlite-store` dependencies from the backend, which now uses `miden-protocol` directly. The API keys are now persisted in a newline-delimited file, configurable with `--api-keys-file` / `MIDEN_FAUCET_API_KEYS`. The mint transaction code and the note screener were also removed ([#310](https://github.com/0xMiden/faucet/pull/310)).
 - [BREAKING] Integrated the funding service into the faucet. Now the faucet owns no account, and all token requests are forwarded to the funding service instead of being minted. The `init` command is no longer needed, and the `start` command now requires `--funding-service-url` and `--decimals` ([#308](https://github.com/0xMiden/faucet/pull/308)).
