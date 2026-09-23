@@ -24,7 +24,7 @@ use tokio::task::JoinSet;
 use url::Url;
 
 use crate::api::{ApiServer, Metadata};
-use crate::api_key::ApiKey;
+use crate::api_key::{ApiKey, ApiKeys};
 use crate::frontend::serve_frontend;
 use crate::funding_service_client::FundingServiceClient;
 use crate::logging::OpenTelemetry;
@@ -249,7 +249,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 let mut rng = ChaCha20Rng::from_seed(rand::random());
                 let key = ApiKey::generate(&mut rng);
 
-                api_key::add(&api_keys_path, &key).await?;
+                ApiKeys::add(&api_keys_path, &key).await?;
 
                 println!("{}", key.encode());
             },
@@ -257,13 +257,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             ApiKeyCommand::Remove { api_keys_path, api_key } => {
                 let key = ApiKey::decode(&api_key).context("failed to decode API key")?;
 
-                api_key::remove(&api_keys_path, &key).await?;
+                ApiKeys::remove(&api_keys_path, &key).await?;
 
                 println!("API key removed");
             },
 
             ApiKeyCommand::List { api_keys_path } => {
-                let encoded_keys = api_key::list(&api_keys_path).await?;
+                let encoded_keys = ApiKeys::list(&api_keys_path).await?;
                 if encoded_keys.is_empty() {
                     println!("No API keys found.");
                 } else {
@@ -301,7 +301,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let node_url = parse_node_url(node_url, &network)?;
 
             let api_keys =
-                api_key::load(&api_keys_path).await.context("failed to load the API keys")?;
+                ApiKeys::load(&api_keys_path).await.context("failed to load the API keys")?;
 
             // The funding service is the only source of notes, so the faucet refuses to serve
             // without it. Its status also bounds what the faucet may hand out.
@@ -432,6 +432,7 @@ mod tests {
     use url::Url;
     use uuid::Uuid;
 
+    use crate::api_key::ApiKeys;
     use crate::funding_service_client::FundingServiceClient;
     use crate::network::FaucetNetwork;
     use crate::testing::stub_funding_service::{STUB_MAX_AMOUNT, serve_stub_funding_service};
@@ -519,7 +520,7 @@ mod tests {
             .unwrap();
         }
 
-        let keys = crate::api_key::list(&api_keys_path).await.unwrap();
+        let keys = ApiKeys::list(&api_keys_path).await.unwrap();
         assert_eq!(keys.len(), 2);
 
         Box::pin(run_faucet_command(Cli::parse_from([
@@ -533,7 +534,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(crate::api_key::list(&api_keys_path).await.unwrap(), vec![keys[1].clone()]);
+        assert_eq!(ApiKeys::list(&api_keys_path).await.unwrap(), vec![keys[1].clone()]);
 
         // The list command runs against the same file without error.
         Box::pin(run_faucet_command(Cli::parse_from([
@@ -645,11 +646,15 @@ mod tests {
 
     /// Starts a faucet against the given stubs and returns its frontend URL.
     fn run_faucet_server(stub_node_url: Url, funding_service_url: Url) -> String {
+        // The faucet reads the file on startup, so it has to exist even with no keys in it.
+        let api_keys_path = temp_dir().join(format!("{}.keys", Uuid::new_v4()));
+        std::fs::write(&api_keys_path, "").unwrap();
+
         let config = ClientConfig {
             node_url: Some(stub_node_url),
             timeout: Duration::from_secs(5),
             network: FaucetNetwork::Localhost,
-            api_keys_path: temp_dir().join(format!("{}.keys", Uuid::new_v4())),
+            api_keys_path,
         };
         let api_bind_port = 8000;
         let frontend_url = "http://localhost:8080";

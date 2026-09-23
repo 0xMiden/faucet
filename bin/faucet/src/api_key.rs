@@ -56,68 +56,70 @@ impl From<ApiKey> for [u8; 32] {
     }
 }
 
-// STORAGE
+// API KEYS
 // ================================================================================================
-//
-// The keys live in a newline-delimited file of encoded keys. A missing file means no keys.
 
-/// Reads the encoded API keys from `path`.
-pub async fn list(path: &Path) -> anyhow::Result<Vec<String>> {
-    let contents = match tokio::fs::read_to_string(path).await {
-        Ok(contents) => contents,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => {
-            return Err(error).with_context(|| format!("failed to read {}", path.display()));
-        },
-    };
+/// The API keys stored in a newline-delimited file of encoded keys.
+///
+/// Holds no state: the file path is passed to each operation.
+pub struct ApiKeys;
 
-    Ok(contents
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(String::from)
-        .collect())
-}
+impl ApiKeys {
+    /// Reads the encoded API keys from `path`, which must exist.
+    pub async fn list(path: &Path) -> anyhow::Result<Vec<String>> {
+        let contents = tokio::fs::read_to_string(path)
+            .await
+            .with_context(|| format!("failed to read {}", path.display()))?;
 
-/// Reads and decodes the API keys from `path`.
-pub async fn load(path: &Path) -> anyhow::Result<Vec<ApiKey>> {
-    list(path)
-        .await?
-        .iter()
-        .map(|encoded| ApiKey::decode(encoded).map_err(|error| anyhow::anyhow!(error)))
-        .collect()
-}
-
-/// Adds `key` to the file at `path`, creating it if it does not exist.
-pub async fn add(path: &Path, key: &ApiKey) -> anyhow::Result<()> {
-    let mut keys = list(path).await?;
-    let encoded = key.encode();
-    if !keys.contains(&encoded) {
-        keys.push(encoded);
+        Ok(contents
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(String::from)
+            .collect())
     }
 
-    write(path, &keys).await
-}
+    /// Reads and decodes the API keys from `path`, which must exist.
+    pub async fn load(path: &Path) -> anyhow::Result<Vec<ApiKey>> {
+        Self::list(path)
+            .await?
+            .iter()
+            .map(|encoded| ApiKey::decode(encoded).map_err(|error| anyhow::anyhow!(error)))
+            .collect()
+    }
 
-/// Removes `key` from the file at `path`.
-///
-/// Fails if the key is not present, so a typo does not report a successful removal.
-pub async fn remove(path: &Path, key: &ApiKey) -> anyhow::Result<()> {
-    let mut keys = list(path).await?;
-    let encoded = key.encode();
-    let before = keys.len();
-    keys.retain(|existing| existing != &encoded);
-    anyhow::ensure!(keys.len() < before, "API key not found in {}", path.display());
+    /// Adds `key` to the file at `path`, creating it if it does not exist.
+    pub async fn add(path: &Path, key: &ApiKey) -> anyhow::Result<()> {
+        // The first key is created before the file exists.
+        let mut keys = if path.exists() { Self::list(path).await? } else { Vec::new() };
+        let encoded = key.encode();
+        if !keys.contains(&encoded) {
+            keys.push(encoded);
+        }
 
-    write(path, &keys).await
-}
+        Self::write(path, &keys).await
+    }
 
-async fn write(path: &Path, keys: &[String]) -> anyhow::Result<()> {
-    let mut contents = keys.join("\n");
-    contents.push('\n');
-    tokio::fs::write(path, contents)
-        .await
-        .with_context(|| format!("failed to write {}", path.display()))
+    /// Removes `key` from the file at `path`.
+    ///
+    /// Fails if the key is not present, so a typo does not report a successful removal.
+    pub async fn remove(path: &Path, key: &ApiKey) -> anyhow::Result<()> {
+        let mut keys = Self::list(path).await?;
+        let encoded = key.encode();
+        let before = keys.len();
+        keys.retain(|existing| existing != &encoded);
+        anyhow::ensure!(keys.len() < before, "API key not found in {}", path.display());
+
+        Self::write(path, &keys).await
+    }
+
+    async fn write(path: &Path, keys: &[String]) -> anyhow::Result<()> {
+        let mut contents = keys.join("\n");
+        contents.push('\n');
+        tokio::fs::write(path, contents)
+            .await
+            .with_context(|| format!("failed to write {}", path.display()))
+    }
 }
 
 #[cfg(test)]
@@ -150,15 +152,15 @@ mod tests {
         let first = ApiKey::generate(&mut rng);
         let second = ApiKey::generate(&mut rng);
 
-        assert!(load(&path).await.unwrap().is_empty(), "a missing file holds no keys");
+        ApiKeys::load(&path).await.expect_err("a missing file should fail to load");
 
-        add(&path, &first).await.unwrap();
-        add(&path, &second).await.unwrap();
-        assert_eq!(load(&path).await.unwrap(), vec![first.clone(), second.clone()]);
+        ApiKeys::add(&path, &first).await.unwrap();
+        ApiKeys::add(&path, &second).await.unwrap();
+        assert_eq!(ApiKeys::load(&path).await.unwrap(), vec![first.clone(), second.clone()]);
 
-        remove(&path, &first).await.unwrap();
-        assert_eq!(load(&path).await.unwrap(), vec![second.clone()]);
+        ApiKeys::remove(&path, &first).await.unwrap();
+        assert_eq!(ApiKeys::load(&path).await.unwrap(), vec![second.clone()]);
 
-        remove(&path, &first).await.expect_err("removing an absent key should fail");
+        ApiKeys::remove(&path, &first).await.expect_err("removing an absent key should fail");
     }
 }
