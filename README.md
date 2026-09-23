@@ -23,7 +23,7 @@ own, so only the faucet should be able to reach it.
 make install-faucet
 ```
 
-2. Start the faucet, pointing it at a node and at the funding service:
+2. Start the faucet, pointing it at the funding service:
 ```bash
 miden-faucet start \
   --funding-service-url http://localhost:50401 \
@@ -35,9 +35,6 @@ miden-faucet start \
 `start` reads the funding service's `/status` first and fails if it cannot be reached. It also
 fails if `--max-claimable-amount` is larger than the funding service's own maximum. There is no
 `init` step: the faucet holds no account.
-
-> [!NOTE]
-> Only public notes are supported. Private notes come back once the funding service can create them.
 
 ## Docker
 
