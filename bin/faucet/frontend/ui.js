@@ -5,8 +5,8 @@ export class UIController {
         this.recipientInput = document.getElementById('recipient-address');
         this.tokenSelect = document.getElementById('token-amount');
         this.sendButton = document.getElementById('send-button');
-        // Notes are always private; the API still takes the flag.
-        this.isPrivateNote = true;
+        // Notes are always public; the API still takes the flag.
+        this.isPrivateNote = false;
         this.walletConnectButton = document.getElementById('wallet-connect-button');
         this.faucetAddress = document.getElementById('faucet-address');
         this.faucetAddressLoader = document.getElementById('faucet-address-loader');
@@ -164,7 +164,7 @@ export class UIController {
         icon.style.display = 'block';
 
         const errorMessage = document.getElementById('home-error-message');
-        errorMessage.style.backgroundColor = '#F6DED2';
+        errorMessage.classList.add('pending');
     }
 
     hideIcons() {
@@ -195,6 +195,7 @@ export class UIController {
         errorDescription.textContent = description;
 
         const errorMessage = document.getElementById('home-error-message');
+        errorMessage.classList.remove('pending');
         errorMessage.style.display = 'flex';
     }
 
@@ -203,8 +204,7 @@ export class UIController {
 
         const errorMessage = document.getElementById('home-error-message');
         errorMessage.style.display = 'none';
-        errorMessage.style.backgroundColor = '#FFE8E9';
-
+        errorMessage.classList.remove('pending');
     }
 
     setTokenHint(estimatedTime) {

@@ -2,7 +2,7 @@
 
 ## 0.17.0 (TBD)
 
-- Redesigned the faucet frontend: new hero illustration and typography, a single send button (notes are always private), inline minting and result views, a stats card for issuance and the faucet address, dark mode, and the Bread wallet logo on the connect button ([#306](https://github.com/0xMiden/faucet/pull/306)).
+- Redesigned the faucet frontend: new hero illustration and typography, a single send button (notes are always public), inline minting and result views, a stats card for issuance and the faucet address, dark mode, and the Bread wallet logo on the connect button ([#306](https://github.com/0xMiden/faucet/pull/306) ([#312](https://github.com/0xMiden/faucet/pull/312))).
 
 ## 0.16.0 (2026-09-08)
 
