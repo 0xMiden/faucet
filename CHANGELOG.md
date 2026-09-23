@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.0 (TBD)
+
+- Redesigned the faucet frontend: new hero illustration and typography, a single send button (notes are always private), inline minting and result views, a stats card for issuance and the faucet address, dark mode, and the Bread wallet logo on the connect button ([#306](https://github.com/0xMiden/faucet/pull/306)).
+
 ## 0.16.0 (2026-09-08)
 
 - Updated `miden-client` and `miden-node-proto-build` dependencies to v0.16.0, bumped the workspace version to 0.16.0, and updated the declared `rust-version` and the Docker builder image to 1.98.1 ([#300](https://github.com/0xMiden/faucet/pull/300)).
