@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.0-rc.2 (2026-09-24)
 
 - [BREAKING] Removed `transaction_id` from the expected funding service token request response and the corresponding `tx_id` from the `/get_tokens` response, and updated the frontend accordingly. The frontend no longer shows a "Faucet unavailable" error when requesting tokens ([#316](https://github.com/0xMiden/faucet/pull/316)).
 - Fixed the position of the error element in the frontend, to prevent an error from stretching the page ([#316](https://github.com/0xMiden/faucet/pull/316)).
