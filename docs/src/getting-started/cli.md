@@ -4,7 +4,7 @@ This guide shows the available commands and their configuration options to run w
 
 The faucet comes with two CLI tools:
 
-- **miden-faucet**: Runs the faucet, used for initializing and starting the faucet.
+- **miden-faucet**: Runs the faucet server.
 - **miden-faucet-client**: Used for interacting with a live faucet, i.e. for requesting tokens from a running faucet.
 
 ## Available Commands
