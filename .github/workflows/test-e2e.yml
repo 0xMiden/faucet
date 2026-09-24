@@ -35,7 +35,7 @@ jobs:
         run: cargo build --release --locked -p miden-faucet -p miden-faucet-client
 
       - name: Download the Miden client CLI
-        run: scripts/e2e/miden-client.sh
+        run: scripts/e2e/install-miden-client.sh
 
       - name: Start the node and the funding service
         run: scripts/e2e/network.sh up

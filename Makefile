@@ -83,7 +83,7 @@ test:  ## Runs all tests
 .PHONY: test-e2e
 test-e2e: ## Runs the end-to-end test against a real node and funding service
 	cargo build --release --locked -p miden-faucet -p miden-faucet-client
-	scripts/e2e/miden-client.sh
+	scripts/e2e/install-miden-client.sh
 	scripts/e2e/network.sh up
 	scripts/e2e/faucet.sh up
 	scripts/e2e/request-tokens.sh; \
