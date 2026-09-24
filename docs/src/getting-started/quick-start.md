@@ -6,6 +6,7 @@ Get the Miden Faucet running in minutes.
 
 - Miden Faucet installed (see [Installation](./installation.md))
 - Access to a Miden node (testnet, devnet, or local)
+- A running [funding service](https://github.com/0xMiden/node), which holds the chain's native asset and creates the notes. The faucet owns no account: it validates each request and forwards it to the funding service, so `start` fails when the service cannot be reached.
 
 ## Step 1: Start the Faucet
 
@@ -63,6 +64,22 @@ miden-faucet start \
   --decimals 6 \
   --network localhost
 ```
+
+To set both up from source:
+
+1. Start a node from the [rust-sdk](https://github.com/0xMiden/rust-sdk) repository with `make start-node`. It serves the RPC on `127.0.0.1:57291` and a remote prover on `127.0.0.1:50051`, and writes genesis wallets that hold the native asset to `data/funders/`.
+2. Start the funding service from the [node](https://github.com/0xMiden/node) repository, paying out of one of those wallets and trusting the validator key the node was started with:
+
+   ```bash
+   cargo run --release -p miden-funding-service -- start \
+     --listen 127.0.0.1:50401 \
+     --rpc.url http://127.0.0.1:57291 \
+     --tx-prover.url http://127.0.0.1:50051 \
+     --account-file <RUST_SDK_DIRECTORY>/data/funders/wallet_15.mac \
+     --validator-signing-public-key <VALIDATOR_PUBLIC_KEY_HEX>
+   ```
+
+3. Start the faucet with the command above and open `http://localhost:8080`.
 
 ### Faucet API Only (No Frontend)
 

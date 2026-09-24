@@ -54,7 +54,7 @@ url                   = { workspace = true }
 fantoccini      = { version = "0.22" }
 miden-protocol  = { features = ["testing"], workspace = true }
 miden-standards = { workspace = true }
-miden-testing   = { default-features = false, version = "=0.17.0-rc.5" }
+miden-testing   = { default-features = false, version = "=0.17.0-rc.6" }
 prost           = { version = "0.14" }
 serde_json      = { workspace = true }
 tokio           = { features = ["macros", "process"], workspace = true }
@@ -66,7 +66,7 @@ uuid            = { workspace = true }
 # (so the dependency only lies in the protobuf interface).
 [build-dependencies]
 brotli                 = { version = "8" }
-miden-node-proto-build = { version = "=0.17.0-rc.1" }
+miden-node-proto-build = { version = "=0.17.0-rc.2" }
 tonic-prost-build      = { version = "0.14" }
 
 # Required to avoid false positives in cargo-machete

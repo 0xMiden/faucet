@@ -1,7 +1,8 @@
 # Changelog
 
-## 0.17.0 (TBD)
+## 0.17.0-rc.1 (TBD)
 
+- Updated the Miden dependencies: `miden-protocol` / `miden-standards` / `miden-testing` to v0.17.0-rc.6, `miden-client` / `miden-client-cli` / `miden-client-sqlite-store` / `miden-node-proto-build` to v0.17.0-rc.2, and the frontend SDK and wallet adapter to v0.17.0-rc.2. Bumped the workspace version to 0.17.0-rc.1.
 - Redesigned the faucet frontend: new hero illustration and typography, a single send button (notes are always public), inline minting and result views, a stats card for issuance and the faucet address, dark mode, and the Bread wallet logo on the connect button ([#306](https://github.com/0xMiden/faucet/pull/306) ([#312](https://github.com/0xMiden/faucet/pull/312))).
 - [BREAKING] Removed the `init` command. The faucet now requires no initialization and can be started just with the `start` command ([#310](https://github.com/0xMiden/faucet/pull/310)).
 - Removed the `miden-client` and `miden-client-sqlite-store` dependencies from the backend, which now uses `miden-protocol` directly. The API keys are now persisted in a newline-delimited file, configurable with `--api-keys-file` / `MIDEN_FAUCET_API_KEYS`. The mint transaction code and the note screener were also removed ([#310](https://github.com/0xMiden/faucet/pull/310)).
