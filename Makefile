@@ -110,20 +110,24 @@ e2e-network-logs: ## Prints the logs of the end-to-end network
 
 .PHONY: e2e-faucet-up
 e2e-faucet-up: ## Starts a faucet against the end-to-end network
-	cargo build --locked -p miden-faucet
+	cargo build --release --locked -p miden-faucet
 	scripts/e2e-faucet.sh up
 
 .PHONY: e2e-faucet-down
 e2e-faucet-down: ## Stops the faucet started for the end-to-end test
 	scripts/e2e-faucet.sh down
 
+.PHONY: e2e-miden-client
+e2e-miden-client: ## Downloads the Miden client CLI the end-to-end test uses
+	scripts/e2e-miden-client.sh
+
 .PHONY: e2e-request-tokens
-e2e-request-tokens: ## Requests tokens from the end-to-end faucet with the client binary
-	cargo build --locked -p miden-faucet-client
+e2e-request-tokens: ## Requests tokens from the end-to-end faucet and consumes the note
+	cargo build --release --locked -p miden-faucet-client
 	scripts/e2e-request-tokens.sh
 
 .PHONY: test-e2e
-test-e2e: e2e-network-up e2e-faucet-up ## Runs the end-to-end test against a real node and funding service
+test-e2e: e2e-network-up e2e-miden-client e2e-faucet-up ## Runs the end-to-end test against a real node and funding service
 	$(MAKE) e2e-request-tokens; \
 	    status=$$?; $(MAKE) e2e-faucet-down e2e-network-down; exit $$status
 

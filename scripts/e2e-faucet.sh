@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-FAUCET_BIN="${FAUCET_BIN:-./target/debug/miden-faucet}"
+FAUCET_BIN="${FAUCET_BIN:-./target/release/miden-faucet}"
 FAUCET_URL="${FAUCET_URL:-http://127.0.0.1:18000}"
 NODE_URL="${NODE_URL:-http://127.0.0.1:57391}"
 FUNDING_SERVICE_URL="${FUNDING_SERVICE_URL:-http://127.0.0.1:50501}"

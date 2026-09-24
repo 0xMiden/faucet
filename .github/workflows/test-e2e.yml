@@ -30,7 +30,10 @@ jobs:
           save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/next' }}
 
       - name: Build the faucet and its client
-        run: cargo build --locked -p miden-faucet -p miden-faucet-client
+        run: cargo build --release --locked -p miden-faucet -p miden-faucet-client
+
+      - name: Download the Miden client CLI
+        run: make e2e-miden-client
 
       - name: Start the node and the funding service
         run: make e2e-network-up
