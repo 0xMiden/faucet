@@ -1,0 +1,14 @@
+# Port overrides for the end-to-end test, merged on top of the node repo's compose stack by
+# `make test-e2e`.
+#
+# The stack publishes the RPC on 57291 and the funding service on 50401, which are the ports a
+# developer's own local network already uses. Moving them lets the test run without stopping it.
+
+services:
+  sequencer:
+    ports: !override
+      - "127.0.0.1:57391:57291"
+
+  funding-service:
+    ports: !override
+      - "127.0.0.1:50501:50401"
