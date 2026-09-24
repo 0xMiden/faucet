@@ -1,13 +1,9 @@
-use miden_client::account::AccountId;
-use miden_client::note::NoteId;
-use miden_client::transaction::TransactionId;
+use miden_protocol::account::AccountId;
+use miden_protocol::note::NoteId;
+use miden_protocol::transaction::TransactionId;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, oneshot};
 
 use crate::types::AssetAmount;
-
-pub type MintResponseSender = oneshot::Sender<Result<MintResponse, MintError>>;
-pub type MintRequestSender = mpsc::Sender<(MintRequest, MintResponseSender)>;
 
 // QUERY PARAMETERS
 // ================================================================================================
@@ -66,10 +62,4 @@ pub struct MintRequest {
 pub struct MintResponse {
     pub tx_id: TransactionId,
     pub note_id: NoteId,
-}
-
-#[derive(Debug, Clone, thiserror::Error)]
-pub enum MintError {
-    #[error("faucet supply exceeded")]
-    AvailableSupplyExceeded,
 }

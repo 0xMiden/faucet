@@ -30,12 +30,10 @@ The high-level structure of the project looks like follows:
 
 ### 3. Faucet lib
 - **Technology**: Rust library (`crates/faucet`)
-- **Purpose**: Faucet core logic
+- **Purpose**: Types shared by the faucet server and the faucet client
 - **Features**:
-  - Account handling
-  - Request batching
-  - Notes creation
-  - Token issuance tracking
+  - Request and response shapes of the HTTP API
+  - Asset amount validation
 
 ### 4. PoW Rate Limiter
 - **Technology**: Rust library (`crates/pow`)
@@ -44,10 +42,16 @@ The high-level structure of the project looks like follows:
    - PoW challenges issuing, tracking and validation
    - Rate limiting
 
-### 5. Miden Client
-- **Purpose**: Connection with the Miden Node
+### 5. Funding service
+- **Purpose**: Holds the chain's native asset and creates the notes
 - **Features**:
-  - Transaction creation, execution, and submission
+  - Creates a public P2ID note per request and queues it for the next funding transaction
+  - Reports its account, balance and per-request maximum through `/status`
+
+The faucet owns no account and submits no transactions. It is the gatekeeper in front of the funding
+service: it validates the proof of work, the API key and the claim cap, then forwards the request.
+The funding service has no authentication or rate limiting of its own, so its HTTP API must be
+reachable only from the faucet.
 
 ## Token request Flow
 
@@ -70,20 +74,18 @@ The basic HTTP requests for minting tokens involves `/pow` and `/get_tokens`. Th
    - Rate limiting enforced
 
 - **Token Distribution**
-   - Validated request processed
-   - Token transaction created
-   - A public P2ID note is generated
-   - Transaction is created, executed, and stored in the local database
-   - Transaction is proven and submitted to Miden Node
+   - Validated request forwarded to the funding service
+   - The funding service creates a public P2ID note addressed to the recipient
 
 - **Response**
    - Transaction ID and Note ID returned
 
 ## Why do we need a backend?
 
-Could we not simply use the Miden Web SDK without a backend? The reason is security: if we were to use the Web SDK without a backend, the account's private key would need to be shared with the frontend. This would expose the private key to anyone, allowing them to potentially mint unlimited tokens and bypass all the rate limiting and throttling mechanisms.
-
-The solution is to have a single backend running that receives and validates the minting requests and stores the account's private key needed to mint the tokens.
+Could the frontend not call the funding service directly? The reason is security: the funding
+service has no authentication and no rate limiting, so anyone who can reach it can drain it. The
+backend is what enforces the proof of work, the API keys and the claim cap, and it is the only thing
+allowed to reach the funding service.
 
 ## Security Features
 
@@ -96,7 +98,5 @@ The faucet implements several security measures to prevent abuse:
   - **Rate limiting**: if an account submitted a challenge, it can't submit another one until the previous one is expired. The challenge lifetime duration is fixed and set when running the faucet.
   - **API Keys**: the faucet is initialized with a set of API Keys that can be distributed to developers. The difficulty of the challenges requested using the API Key will increase only with the load of that key, it won't be influenced by the overall load of the faucet.
 
-- **Requests batching**:
-  - Maximum batch size: 100 requests
-  - Requests are processed in batches to optimize performance
-  - Failed requests within a batch are handled individually
+- **Claim cap**: each request is capped by `--max-claimable-amount`, which the faucet refuses to
+  start with if it is larger than the funding service's own maximum.

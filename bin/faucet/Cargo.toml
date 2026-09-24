@@ -19,8 +19,7 @@ miden-faucet-lib       = { workspace = true }
 miden-pow-rate-limiter = { features = ["tokio"], workspace = true }
 
 # Miden dependencies.
-miden-client              = { features = ["tonic"], workspace = true }
-miden-client-sqlite-store = { workspace = true }
+miden-protocol = { workspace = true }
 
 # External dependencies.
 anyhow                = { workspace = true }
@@ -52,15 +51,16 @@ tracing-subscriber    = { workspace = true }
 url                   = { workspace = true }
 
 [dev-dependencies]
-fantoccini    = { version = "0.22" }
-miden-client  = { features = ["testing"], workspace = true }
-miden-testing = { default-features = false, version = "=0.17.0-rc.5" }
-prost         = { version = "0.14" }
-serde_json    = { workspace = true }
-tokio         = { features = ["macros", "process"], workspace = true }
-tonic-prost   = { version = "0.14" }
-tonic-web     = { version = "0.14" }
-uuid          = { workspace = true }
+fantoccini      = { version = "0.22" }
+miden-protocol  = { features = ["testing"], workspace = true }
+miden-standards = { workspace = true }
+miden-testing   = { default-features = false, version = "=0.17.0-rc.5" }
+prost           = { version = "0.14" }
+serde_json      = { workspace = true }
+tokio           = { features = ["macros", "process"], workspace = true }
+tonic-prost     = { version = "0.14" }
+tonic-web       = { version = "0.14" }
+uuid            = { workspace = true }
 
 # Used to generate the node RPC types for the stub node used in tests
 # (so the dependency only lies in the protobuf interface).

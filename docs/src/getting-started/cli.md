@@ -11,11 +11,10 @@ The faucet comes with two CLI tools:
 
 | Command | Description |
 |---------|-------------|
-| `init` | Create the faucet account and initialize the client |
 | `start` | Start the faucet server |
-| `api-key create` | Generate an API key and persist it to the store |
-| `api-key remove` | Remove a persisted API key from the store |
-| `api-key list` | List all persisted API keys in the store |
+| `api-key create` | Generate an API key and append it to the API keys file |
+| `api-key remove` | Remove an API key from the API keys file |
+| `api-key list` | List all API keys in the API keys file |
 | `help` | Show help information |
 
 ## Configuration Methods
@@ -25,79 +24,36 @@ The Miden Faucet can be configured using:
 1. **Command-line arguments**
 2. **Environment variables**
 
-## Command-Line Arguments
-
-### Basic Configuration
-
-```bash
-miden-faucet init \
-  --token-symbol <SYMBOL> \
-  --decimals <U8> \
-  --max-supply <U64> \
-  --node-url <URL> \
-  --network <NETWORK>
-```
-
-```bash
-miden-faucet start \
-  --api-bind-port <PORT> \
-  --frontend-bind-port <PORT> \
-  --node-url <URL> \
-  --network <NETWORK>
-```
-
-## `init` Configuration
+## `start` Configuration
 
 ### Basic Configuration
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--token-symbol` | Symbol of the new token (e.g. "MIDEN", "ETH") | - | Yes (unless importing) |
-| `--decimals` | Number of decimals of the new token | - | Yes (unless importing) |
-| `--max-supply` | Max supply of the new token (in base units) | - | Yes (unless importing) |
-| `--import` | Path to the operator account file. Must be paired with `--faucet-account-id` | - | No |
-| `--faucet-account-id` | Account ID of an existing, deployed faucet account. Must be paired with `--import` | - | No |
-| `--node-url` | Miden node RPC endpoint. If not set, it will be derived from the network | - | No |
-| `--timeout` | RPC request timeout | `5s` | No |
-| `--network` | Network configuration | `localhost` | No |
-| `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
-
-A newly created faucet account is always deployed by submitting an empty transaction. An imported
-faucet account is already on-chain, so nothing is submitted.
-
-### Fee-charging chains
-
-On a chain that charges transaction fees, every transaction pays in the chain's native asset out of
-the executing account's vault, so the faucet operator account needs to hold enough of that asset to
-cover the transactions the faucet submits and has to be topped up as its balance drains.
-
-### Advanced Configuration
-| `--remote-tx-prover-url` | Remote transaction prover. Only relevant when creating a faucet account. | - | No |
-
-## `serve` Configuration
-
-### Basic Configuration
-
-| Option | Description | Default | Required |
-|--------|-------------|---------|----------|
+| `--funding-service-url` | Base URL of the funding service that emits the notes | - | Yes |
+| `--decimals` | Decimals of the token, used by the frontend to convert base units into token amounts | - | Yes |
 | `--api-bind-port` | Port to bind the API server | 8000 | No |
 | `--api-public-url` | Public URL to access the faucet API | http://localhost:8000 | No |
 | `--frontend-bind-port` | Port to bind the frontend server | 8080 | No |
 | `--no-frontend` | Optionally disable the frontend server | false | No |
 | `--node-url` | Miden node RPC endpoint. If not set, it will be derived from the network | - | No |
 | `--network` | Network configuration | `localhost` | No |
-| `--timeout` | RPC request timeout | `5s` | No |
+| `--timeout` | Funding service request timeout | `5s` | No |
 | `--max-claimable-amount` | Max claimable base units per request | `1000000000` | No |
-| `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
+| `--api-keys-file` | Path to the API keys file | `api_keys.txt` | No |
 | `--explorer-url` | Midenscan URL | - | No |
 | `--base-amount` | Token amount (in base units) at which the difficulty of the challenge starts to increase. | `100000000` | No |
+
+`start` reads the funding service's `/status` before serving and fails if it cannot be reached. It
+also fails if `--max-claimable-amount` is larger than the funding service's own maximum, since the
+faucet must never hand out more than the service accepts.
 
 ### Proof of Work Configuration
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
 | `--pow-secret` | Secret to sign PoW challenges. This should NOT be shared | - | No |
-| `--pow-baseline` | Base PoW difficulty (0-32). It's the starting difficulty when no requests are pending | `12` | No |
+| `--pow-baseline` | Base PoW difficulty (0-32). It's the starting difficulty when no requests are pending | `16` | No |
 | `--pow-challenge-lifetime` | Challenge validity duration, i.e. how long challenges remain valid. This affects the rate limiting, since it works by rejecting new submissions while the previous submitted challenge is still valid | `30s` | No |
 | `--pow-cleanup-interval` | Cache cleanup interval, i.e. how often expired challenges are removed | `2s` | No |
 | `--pow-growth-rate` | Difficulty growth rate, i.e. how quickly difficulty increases with load. | `0.1` | No |
@@ -106,43 +62,34 @@ cover the transactions the faucet submits and has to be topped up as its balance
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--remote-tx-prover-url` | Remote transaction prover | - | No |
 | `--enable-otel` | Enable OpenTelemetry | `false` | No |
-| `--batch-size` | Maximum number of P2ID notes to create per transaction | `32` | No |
 
 ## Environment Variables
 
 All configuration options can be set using environment variables:
 
 ```bash
-# Faucet Account Configuration
-export MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH=operator.mac
-export MIDEN_FAUCET_FAUCET_ACCOUNT_ID=
-
 # Faucet Service Configuration
+export MIDEN_FAUCET_FUNDING_SERVICE_URL=http://localhost:50401
 export MIDEN_FAUCET_DECIMALS=6
 export MIDEN_FAUCET_API_BIND_PORT=8000
 export MIDEN_FAUCET_FRONTEND_BIND_PORT=8080
 export MIDEN_FAUCET_NO_FRONTEND=false
 export MIDEN_FAUCET_API_PUBLIC_URL=http://localhost:8000
 export MIDEN_FAUCET_MAX_CLAIMABLE_AMOUNT=1000000000
+export MIDEN_FAUCET_API_KEYS=api_keys.txt
 export MIDEN_FAUCET_ENABLE_OTEL=true
 export MIDEN_FAUCET_BASE_AMOUNT=100000000
 
 # Network & Node Configuration
-export MIDEN_FAUCET_FUNDING_SERVICE_URL=http://localhost:50401
 export MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io
 export MIDEN_FAUCET_NETWORK=testnet
 export MIDEN_FAUCET_TIMEOUT=10s
 export MIDEN_FAUCET_EXPLORER_URL=https://testnet.midenscan.com
 
-# Faucet Client Configuration
-export MIDEN_FAUCET_STORE=faucet_client_store.sqlite3
-export MIDEN_FAUCET_REMOTE_TX_PROVER_URL=https://tx-prover.devnet.miden.io
-
 # Rate Limiting Configuration
 export MIDEN_FAUCET_POW_SECRET=your-secret-here
-export MIDEN_FAUCET_POW_BASELINE=12
+export MIDEN_FAUCET_POW_BASELINE=16
 export MIDEN_FAUCET_POW_CHALLENGE_LIFETIME=30s
 export MIDEN_FAUCET_POW_CLEANUP_INTERVAL=2s
 export MIDEN_FAUCET_POW_GROWTH_RATE=0.1
@@ -187,7 +134,7 @@ export MIDEN_FAUCET_POW_GROWTH_RATE=0.1
 
 ## API Key Management
 
-API keys are persisted in the faucet's SQLite store and automatically loaded when the faucet starts.
+API keys live in a newline-delimited file of encoded keys, which the faucet reads at startup.
 
 ### Create an API Key
 
@@ -195,11 +142,11 @@ API keys are persisted in the faucet's SQLite store and automatically loaded whe
 miden-faucet api-key create
 ```
 
-Generates a new API key, persists it to the store, and prints it to stdout.
+Generates a new API key, appends it to the file, and prints it to stdout.
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
+| `--api-keys-file` | Path to the API keys file | `api_keys.txt` | No |
 
 ### List API Keys
 
@@ -207,11 +154,11 @@ Generates a new API key, persists it to the store, and prints it to stdout.
 miden-faucet api-key list
 ```
 
-Lists all persisted API keys in the store.
+Lists all API keys in the file.
 
 | Option | Description | Default | Required |
 |--------|-------------|---------|----------|
-| `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
+| `--api-keys-file` | Path to the API keys file | `api_keys.txt` | No |
 
 ### Remove an API Key
 
@@ -219,31 +166,21 @@ Lists all persisted API keys in the store.
 miden-faucet api-key remove <KEY>
 ```
 
-Removes a persisted API key from the store.
+Removes an API key from the file. Fails if the key is not there.
 
 | Argument/Option | Description | Default | Required |
 |--------|-------------|---------|----------|
 | `<KEY>` | The API key to remove (encoded string) | - | Yes |
-| `--store` | SQLite store path | `faucet_client_store.sqlite3` | No |
+| `--api-keys-file` | Path to the API keys file | `api_keys.txt` | No |
 
 ### API Key Loading
 
-When the faucet starts, it automatically loads all API keys persisted in the store via the `api-key create` command.
+When the faucet starts, it loads every API key in the file.
 
 ### API Key Benefits
 
 - **Rate Limiting**: Separate rate limits per API key
 - **Access Control**: Distribute keys to different users/teams
-
-## Store Configuration
-
-### SQLite Store
-
-This is the store that is used by the Miden Client to store all the faucet account state. Default is SQLite:
-
-```bash
---store ./faucet_client_store.sqlite3.sqlite3
-```
 
 ## Monitoring Configuration
 
@@ -258,13 +195,9 @@ Enable OpenTelemetry for production monitoring:
 ## Configuration Example
 
 ```bash
-miden-faucet init \
-  --token-symbol MIDEN \
-  --decimals 6 \
-  --max-supply 100000000000000000 \
-  --node-url http://localhost:57291
-
 miden-faucet start \
+  --funding-service-url http://localhost:50401 \
+  --decimals 6 \
   --frontend-bind-port 8080 \
   --api-bind-port 8000 \
   --node-url http://localhost:57291 \

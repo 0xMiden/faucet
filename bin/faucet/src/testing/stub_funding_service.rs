@@ -2,12 +2,13 @@
 
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use miden_client::Word;
-use miden_client::account::AccountId;
-use miden_client::asset::FungibleAsset;
-use miden_client::note::{Note, NoteType, P2idNote};
-use miden_client::transaction::TransactionId;
-use miden_client::utils::Serializable;
+use miden_protocol::Word;
+use miden_protocol::account::AccountId;
+use miden_protocol::asset::FungibleAsset;
+use miden_protocol::note::{Note, NoteType};
+use miden_protocol::transaction::TransactionId;
+use miden_protocol::utils::serde::Serializable;
+use miden_standards::note::P2idNote;
 use serde::Deserialize;
 use tokio::net::TcpListener;
 

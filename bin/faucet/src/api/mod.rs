@@ -6,10 +6,10 @@ use axum::Router;
 use axum::extract::FromRef;
 use axum::routing::get;
 use http::HeaderValue;
-use miden_client::account::{AccountId, AccountIdError, AddressError};
-use miden_client::utils::hex_to_bytes;
 use miden_faucet_lib::types::AssetAmount;
 use miden_pow_rate_limiter::{Challenge, ChallengeError, PoWRateLimiter, PoWRateLimiterConfig};
+use miden_protocol::account::AccountId;
+use miden_protocol::errors::{AccountIdError, AddressError};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
@@ -125,9 +125,10 @@ impl ApiServer {
         let mut requestor = [0u8; 32];
         requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
 
-        let challenge = hex_to_bytes::<{ Challenge::SERIALIZED_SIZE }>(&format!("0x{challenge}"))
-            .map_err(|_| MintRequestError::PowError(ChallengeError::InvalidSerialization))?
-            .into();
+        let mut challenge_bytes = [0u8; Challenge::SERIALIZED_SIZE];
+        hex::decode_to_slice(challenge, &mut challenge_bytes)
+            .map_err(|_| MintRequestError::PowError(ChallengeError::InvalidSerialization))?;
+        let challenge = challenge_bytes.into();
         self.rate_limiter
             .submit_challenge(requestor, api_key, &challenge, nonce, timestamp, request_complexity)
             .map_err(MintRequestError::PowError)

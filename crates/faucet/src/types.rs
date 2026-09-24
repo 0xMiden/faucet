@@ -1,6 +1,6 @@
 //! A collection of new types and safety wrappers used throughout the faucet.
 
-use miden_client::asset::FungibleAsset;
+use miden_protocol::asset::FungibleAsset;
 
 /// Represents a valid asset amount for a [`FungibleAsset`].
 ///

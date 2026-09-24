@@ -61,9 +61,7 @@ For detailed information about the token request flow, see the [Architecture](./
 - **Purpose**: Request the faucet metadata to show on the frontend
 
 - **Response**: JSON object containing:
-  - `id` (string): ID of the faucet account
-  - `issuance` (number): amount of tokens issued by the faucet (in base units)
-  - `max_supply` (number): maximum available supply of the faucet (in base units)
+  - `id` (string): address of the funding service account the notes are sent from
   - `decimals` (number): number of decimals of the token minted by the faucet. It is needed to convert base units into token amounts.
   - `explorer_url` (string): URL to view the transaction in the explorer. Only present if available for the current network.
 
