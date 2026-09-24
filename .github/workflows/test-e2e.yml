@@ -35,7 +35,7 @@ jobs:
           save-if: true
 
       - name: Build the faucet and its client
-        run: cargo build --release --locked -p miden-faucet -p miden-faucet-client
+        run: make e2e-build
 
       - name: Download the Miden client CLI
         run: make e2e-miden-client
