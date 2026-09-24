@@ -4,22 +4,15 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use miden_client::account::{AccountId, Address};
 use miden_client::address::AddressId;
-use miden_faucet_lib::requests::{
-    GetTokensQueryParams,
-    GetTokensResponse,
-    MintError,
-    MintRequest,
-    MintRequestSender,
-};
+use miden_faucet_lib::requests::{GetTokensQueryParams, GetTokensResponse, MintRequest};
 use miden_faucet_lib::types::{AssetAmount, AssetAmountError};
 use miden_pow_rate_limiter::ChallengeError;
-use tokio::sync::mpsc::error::TrySendError;
-use tokio::sync::oneshot;
-use tracing::{Instrument, info_span, instrument};
+use tracing::instrument;
 
 use crate::COMPONENT;
 use crate::api::{AccountError, ApiServer};
 use crate::api_key::ApiKey;
+use crate::funding_service_client::FundingServiceError;
 
 // ENDPOINT
 // ================================================================================================
@@ -35,49 +28,19 @@ pub async fn get_tokens(
     State(server): State<ApiServer>,
     Query(request): Query<GetTokensQueryParams>,
 ) -> Result<Json<GetTokensResponse>, GetTokenError> {
-    let (mint_response_sender, mint_response_receiver) = oneshot::channel();
-
     let validated_request =
         validate_get_tokens_params(&request, &server).map_err(GetTokenError::InvalidRequest)?;
 
-    let enqueue_span = info_span!(target: COMPONENT, "server.get_tokens.enqueue");
-    {
-        let _enter = enqueue_span.enter();
-        server
-            .mint_state
-            .request_sender
-            .try_send((validated_request, mint_response_sender))
-            .map_err(|err| match err {
-                TrySendError::Full(_) => GetTokenError::FaucetOverloaded,
-                TrySendError::Closed(_) => GetTokenError::FaucetClosed,
-            })?;
-    }
-
-    let mint_response = mint_response_receiver
-        .instrument(info_span!(target: COMPONENT, "server.get_tokens.await_mint"))
+    let funding_response = server
+        .funding_service
+        .request_funds(validated_request.account_id, validated_request.asset_amount.base_units())
         .await
-        .map_err(|_| GetTokenError::FaucetReturnChannelClosed)?
-        .map_err(GetTokenError::MintError)?;
+        .map_err(GetTokenError::FundingServiceError)?;
 
     Ok(Json(GetTokensResponse {
-        tx_id: mint_response.tx_id.to_string(),
-        note_id: mint_response.note_id.to_string(),
+        tx_id: funding_response.transaction_id.to_hex(),
+        note_id: funding_response.note.id().to_hex(),
     }))
-}
-
-// STATE
-// ================================================================================================
-
-#[derive(Clone)]
-pub struct GetTokensState {
-    pub request_sender: MintRequestSender,
-    pub max_claimable_amount: AssetAmount,
-}
-
-impl GetTokensState {
-    pub fn new(request_sender: MintRequestSender, max_claimable_amount: AssetAmount) -> Self {
-        Self { request_sender, max_claimable_amount }
-    }
 }
 
 // REQUEST VALIDATION
@@ -101,14 +64,8 @@ pub enum MintRequestError {
 pub enum GetTokenError {
     #[error("invalid request: {0}")]
     InvalidRequest(#[source] MintRequestError),
-    #[error("mint error: {0}")]
-    MintError(#[source] MintError),
-    #[error("faucet overloaded")]
-    FaucetOverloaded,
-    #[error("faucet closed")]
-    FaucetClosed,
-    #[error("faucet return channel closed")]
-    FaucetReturnChannelClosed,
+    #[error(transparent)]
+    FundingServiceError(FundingServiceError),
 }
 
 impl GetTokenError {
@@ -117,11 +74,8 @@ impl GetTokenError {
             Self::InvalidRequest(MintRequestError::PowError(ChallengeError::RateLimited(_))) => {
                 StatusCode::TOO_MANY_REQUESTS
             },
-            Self::InvalidRequest(_) | Self::MintError(MintError::AvailableSupplyExceeded) => {
-                StatusCode::BAD_REQUEST
-            },
-            Self::FaucetOverloaded | Self::FaucetClosed => StatusCode::SERVICE_UNAVAILABLE,
-            Self::FaucetReturnChannelClosed => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InvalidRequest(_) => StatusCode::BAD_REQUEST,
+            Self::FundingServiceError(error) => error.status_code(),
         }
     }
 
@@ -135,27 +89,16 @@ impl GetTokenError {
                 "Please enter a valid recipient address.".to_owned()
             },
             Self::InvalidRequest(error) => error.to_string(),
-            Self::MintError(error) => error.to_string(),
-            Self::FaucetOverloaded => {
-                "The faucet is currently overloaded, please try again later.".to_owned()
-            },
-            Self::FaucetClosed => {
-                "The faucet is currently unavailable, please try again later.".to_owned()
-            },
-            Self::FaucetReturnChannelClosed => "Internal error.".to_owned(),
+            Self::FundingServiceError(error) => error.user_facing_error(),
         }
     }
 
     /// Write a trace log for the error, if applicable.
     fn trace(&self) {
         match self {
-            Self::InvalidRequest(_) | Self::MintError(_) => {},
-            Self::FaucetOverloaded => tracing::warn!("faucet client is overloaded"),
-            Self::FaucetClosed => {
-                tracing::error!("faucet channel is closed but requests are still coming in");
-            },
-            Self::FaucetReturnChannelClosed => {
-                tracing::error!("result channel from the faucet closed mid-request");
+            Self::InvalidRequest(_) => {},
+            Self::FundingServiceError(error) => {
+                tracing::error!(target: COMPONENT, %error, "funding service request failed");
             },
         }
     }
@@ -212,11 +155,8 @@ fn validate_get_tokens_params(
 
     let asset_amount =
         AssetAmount::new(params.asset_amount).map_err(MintRequestError::InvalidAssetAmount)?;
-    if asset_amount > server.mint_state.max_claimable_amount {
-        return Err(MintRequestError::AssetAmountTooBig(
-            asset_amount,
-            server.mint_state.max_claimable_amount,
-        ));
+    if asset_amount > server.max_claimable_amount {
+        return Err(MintRequestError::AssetAmountTooBig(asset_amount, server.max_claimable_amount));
     }
 
     // Check the API key, if provided

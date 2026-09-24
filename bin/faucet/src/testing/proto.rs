@@ -9,6 +9,9 @@ use miden_client::utils::Serializable;
 pub mod account {
     include!(concat!(env!("OUT_DIR"), "/account.rs"));
 }
+pub mod asset {
+    include!(concat!(env!("OUT_DIR"), "/asset.rs"));
+}
 pub mod blockchain {
     include!(concat!(env!("OUT_DIR"), "/blockchain.rs"));
 }
@@ -18,45 +21,56 @@ pub mod note {
 pub mod primitives {
     include!(concat!(env!("OUT_DIR"), "/primitives.rs"));
 }
+pub mod protocol_config {
+    include!(concat!(env!("OUT_DIR"), "/protocol_config.rs"));
+}
 pub mod rpc {
     include!(concat!(env!("OUT_DIR"), "/rpc.rs"));
+}
+pub mod submission {
+    include!(concat!(env!("OUT_DIR"), "/submission.rs"));
 }
 pub mod transaction {
     include!(concat!(env!("OUT_DIR"), "/transaction.rs"));
 }
 
-pub fn to_proto_digest(word: Word) -> primitives::Digest {
-    primitives::Digest {
-        d0: word[0].as_canonical_u64(),
-        d1: word[1].as_canonical_u64(),
-        d2: word[2].as_canonical_u64(),
-        d3: word[3].as_canonical_u64(),
-    }
+pub fn to_proto_word(word: Word) -> primitives::Word {
+    primitives::Word { encoded: word.to_bytes() }
 }
 
 pub fn to_proto_block_header(header: &BlockHeader) -> blockchain::BlockHeader {
     blockchain::BlockHeader {
-        version: header.version(),
-        prev_block_commitment: Some(to_proto_digest(header.prev_block_commitment())),
-        block_num: header.block_num().as_u32(),
-        chain_commitment: Some(to_proto_digest(header.chain_commitment())),
-        account_root: Some(to_proto_digest(header.account_root())),
-        nullifier_root: Some(to_proto_digest(header.nullifier_root())),
-        note_root: Some(to_proto_digest(header.note_root())),
-        tx_commitment: Some(to_proto_digest(header.tx_commitment())),
-        tx_kernel_commitment: Some(to_proto_digest(header.tx_kernel_commitment())),
-        validator_keys: header
-            .validator_keys()
-            .as_keys()
-            .iter()
-            .map(|key| blockchain::ValidatorPublicKey { validator_key: key.to_bytes() })
-            .collect(),
+        version: i32::from(header.version()),
+        prev_block_commitment: Some(to_proto_word(header.prev_block_commitment())),
+        block_num: Some(blockchain::BlockNumber { block_num: header.block_num().as_u32() }),
+        chain_commitment: Some(to_proto_word(header.chain_commitment())),
+        account_root: Some(to_proto_word(header.account_root())),
+        nullifier_root: Some(to_proto_word(header.nullifier_root())),
+        note_root: Some(to_proto_word(header.note_root())),
+        tx_commitment: Some(to_proto_word(header.tx_commitment())),
+        validator_config: Some(blockchain::ValidatorConfig {
+            keys: header
+                .validator_config()
+                .keys()
+                .iter()
+                .map(|key| primitives::PublicKey {
+                    key: Some(primitives::public_key::Key::EcdsaK256Keccak(key.to_bytes())),
+                })
+                .collect(),
+            quorum: u32::from(header.validator_config().quorum()),
+        }),
         timestamp: header.timestamp(),
         fee_parameters: Some(blockchain::FeeParameters {
-            native_asset_id: Some(account::AccountId {
-                id: header.fee_parameters().fee_faucet_id().to_bytes(),
-            }),
             verification_base_fee: header.fee_parameters().verification_base_fee(),
+        }),
+        protocol_config_commitment: Some(to_proto_word(header.protocol_config_commitment())),
+        next_protocol_config: header.next_protocol_config().map(|next| {
+            blockchain::NextProtocolConfig {
+                effective_from: Some(blockchain::BlockNumber {
+                    block_num: next.effective_from().as_u32(),
+                }),
+                protocol_config: Some(to_proto_word(next.protocol_config())),
+            }
         }),
     }
 }

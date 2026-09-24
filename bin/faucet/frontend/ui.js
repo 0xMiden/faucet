@@ -8,11 +8,8 @@ export class UIController {
         this.walletConnectButton = document.getElementById('wallet-connect-button');
         this.faucetAddress = document.getElementById('faucet-address');
         this.faucetAddressLoader = document.getElementById('faucet-address-loader');
-        this.issuanceFill = document.getElementById('issuance-fill');
-        this.issuance = document.getElementById('issuance');
-        this.issuanceLoader = document.getElementById('issuance-loader');
-        this.issuanceValues = document.getElementById('issuance-values');
-        this.tokensSupply = document.getElementById('tokens-supply');
+        this.remainingFunds = document.getElementById('remaining-funds');
+        this.remainingFundsLoader = document.getElementById('remaining-funds-loader');
         this.tokenAmountHint = document.getElementById('token-amount-hint');
         this.explorerUrl = null;
     }
@@ -206,24 +203,24 @@ export class UIController {
         this.faucetAddress.hidden = false;
     }
 
-    setExplorerUrl(url) {
-        this.explorerUrl = url;
+    /// The funding service reports no balance when it cannot be reached, which shows as "-".
+    setRemainingFunds(balance, decimals) {
+        this.remainingFunds.textContent =
+            balance == null ? '-' : Utils.baseUnitsToTokens(balance, decimals);
+        this.remainingFundsLoader.hidden = true;
+        this.remainingFunds.hidden = false;
     }
 
-    setIssuanceAndSupply(issuance, max_supply, decimals) {
-        this.issuance.textContent = Utils.baseUnitsToTokens(issuance, decimals);
-        this.tokensSupply.textContent = Utils.baseUnitsToTokens(max_supply, decimals);
-        this.issuanceFill.style.setProperty('--issuance', (issuance / max_supply) * 100);
-        this.issuanceLoader.hidden = true;
-        this.issuanceValues.hidden = false;
+    setExplorerUrl(url) {
+        this.explorerUrl = url;
     }
 
     // Swap the loading placeholders for the "-" placeholders when the data can't be loaded.
     showFooterPlaceholders() {
         this.faucetAddressLoader.hidden = true;
         this.faucetAddress.hidden = false;
-        this.issuanceLoader.hidden = true;
-        this.issuanceValues.hidden = false;
+        this.remainingFundsLoader.hidden = true;
+        this.remainingFunds.hidden = false;
         // The token select is still showing its "Loading…" placeholder if the options never came.
         if (this.tokenSelect.disabled && this.tokenSelect.options.length > 0) {
             this.tokenSelect.options[0].textContent = '-';

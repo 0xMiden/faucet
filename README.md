@@ -91,9 +91,7 @@ Run `init` first, then `start`.
 docker run --rm -v miden-faucet-data:/faucet \
   -e MIDEN_FAUCET_NETWORK=testnet \
   -e MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io \
-  -e MIDEN_FAUCET_TOKEN_SYMBOL=MIDEN \
   -e MIDEN_FAUCET_DECIMALS=6 \
-  -e MIDEN_FAUCET_MAX_SUPPLY=100000000000000000 \
   ghcr.io/0xmiden/miden-faucet:<version> init
 ```
 

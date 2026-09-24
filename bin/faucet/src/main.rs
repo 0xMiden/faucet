@@ -1,6 +1,7 @@
 mod api;
 mod api_key;
 mod frontend;
+mod funding_service_client;
 mod logging;
 mod network;
 #[cfg(test)]
@@ -13,38 +14,29 @@ use std::time::Duration;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use miden_client::account::component::FungibleFaucet;
 use miden_client::account::{AccountFile, AccountId};
 use miden_client::rpc::Endpoint;
 use miden_client::store::{SettingScope, Store};
 use miden_client_sqlite_store::SqliteStore;
 use miden_faucet_lib::types::AssetAmount;
-use miden_faucet_lib::{
-    Faucet,
-    FaucetAccount,
-    FaucetConfig,
-    create_faucet_operator_account,
-    create_network_faucet_account,
-    fetch_fee_faucet_id,
-};
+use miden_faucet_lib::{Faucet, FaucetAccount, FaucetConfig, FaucetId};
 use miden_pow_rate_limiter::PoWRateLimiterConfig;
 use rand::SeedableRng;
 use rand::rngs::ChaCha20Rng;
 use sha2::{Digest, Sha256};
-use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use url::Url;
 
 use crate::api::{ApiServer, Metadata};
 use crate::api_key::ApiKey;
 use crate::frontend::serve_frontend;
+use crate::funding_service_client::FundingServiceClient;
 use crate::logging::OpenTelemetry;
 use crate::network::FaucetNetwork;
 
 // CONSTANTS
 // =================================================================================================
 
-pub const REQUESTS_QUEUE_SIZE: usize = 1000;
 const COMPONENT: &str = "miden-faucet-server";
 const DEFAULT_STORE_PATH: &str = "faucet_client_store.sqlite3";
 
@@ -65,13 +57,11 @@ const ENV_POW_BASELINE: &str = "MIDEN_FAUCET_POW_BASELINE";
 const ENV_BASE_AMOUNT: &str = "MIDEN_FAUCET_BASE_AMOUNT";
 const ENV_ENABLE_OTEL: &str = "MIDEN_FAUCET_ENABLE_OTEL";
 const ENV_STORE: &str = "MIDEN_FAUCET_STORE";
+const ENV_DECIMALS: &str = "MIDEN_FAUCET_DECIMALS";
 const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
-const ENV_BATCH_SIZE: &str = "MIDEN_FAUCET_BATCH_SIZE";
+const ENV_FUNDING_SERVICE_URL: &str = "MIDEN_FAUCET_FUNDING_SERVICE_URL";
 const ENV_IMPORT_OPERATOR_ACCOUNT_PATH: &str = "MIDEN_FAUCET_IMPORT_OPERATOR_ACCOUNT_PATH";
 const ENV_FAUCET_ACCOUNT_ID: &str = "MIDEN_FAUCET_FAUCET_ACCOUNT_ID";
-const ENV_TOKEN_SYMBOL: &str = "MIDEN_FAUCET_TOKEN_SYMBOL";
-const ENV_DECIMALS: &str = "MIDEN_FAUCET_DECIMALS";
-const ENV_MAX_SUPPLY: &str = "MIDEN_FAUCET_MAX_SUPPLY";
 
 // COMMANDS
 // ================================================================================================
@@ -86,31 +76,12 @@ pub struct Cli {
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub enum Command {
-    /// Initialize the faucet with a new or existing account.
+    /// Initialize the faucet with an existing account.
     Init {
         #[clap(flatten)]
         config: ClientConfig,
 
-        /// Symbol of the new token.
-        #[arg(
-            short,
-            long,
-            value_name = "STRING",
-            required_unless_present_any = ["import_operator_account_path", "faucet_account_id"],
-            env = ENV_TOKEN_SYMBOL
-        )]
-        token_symbol: Option<String>,
-
-        /// Decimals of the new token.
-        #[arg(short, long, value_name = "U8", required_unless_present_any = ["import_operator_account_path", "faucet_account_id"], env = ENV_DECIMALS)]
-        decimals: Option<u8>,
-
-        /// Max supply of the new token (in base units).
-        #[arg(short, long, value_name = "U64", required_unless_present_any = ["import_operator_account_path", "faucet_account_id"], env = ENV_MAX_SUPPLY)]
-        max_supply: Option<u64>,
-
-        /// Set an existing operator account file to use, instead of creating a new operator
-        /// account.
+        /// Operator account file to use.
         ///
         /// Must be paired with `--faucet-account-id`, which identifies the faucet account this
         /// operator owns.
@@ -118,22 +89,20 @@ pub enum Command {
             long = "import",
             value_name = "FILE",
             requires = "faucet_account_id",
-            conflicts_with_all = ["token_symbol", "decimals", "max_supply"],
             env = ENV_IMPORT_OPERATOR_ACCOUNT_PATH
         )]
-        import_operator_account_path: Option<PathBuf>,
+        import_operator_account_path: PathBuf,
 
-        /// Account ID of the existing faucet account to use, instead of creating a new one.
+        /// Account ID of the existing faucet account to use.
         /// It must be a network account and it must be already deployed.
         /// Must be paired with `--import`, which supplies the operator account that owns it.
         #[arg(
             long = "faucet-account-id",
             value_name = "ACCOUNT_ID",
             requires = "import_operator_account_path",
-            conflicts_with_all = ["token_symbol", "decimals", "max_supply"],
             env = ENV_FAUCET_ACCOUNT_ID
         )]
-        faucet_account_id: Option<String>,
+        faucet_account_id: String,
     },
 
     /// Manage API keys.
@@ -146,6 +115,15 @@ pub enum Command {
     Start {
         #[clap(flatten)]
         config: ClientConfig,
+
+        /// Base URL of the funding service that emits the notes.
+        #[arg(long = "funding-service-url", value_name = "URL", env = ENV_FUNDING_SERVICE_URL)]
+        funding_service_url: Url,
+
+        /// Decimals of the token the funding service hands out, used by the frontend to convert
+        /// base units into token amounts.
+        #[arg(long = "decimals", value_name = "U8", env = ENV_DECIMALS)]
+        decimals: u8,
 
         /// Port to bind the API server. The server will be started on `0.0.0.0:<api-bind-port>`.
         #[arg(long = "api-bind-port", value_name = "PORT", env = ENV_API_BIND_PORT, default_value = "8000")]
@@ -219,11 +197,6 @@ pub enum Command {
         /// Explorer URL.
         #[arg(long = "explorer-url", value_name = "URL", env = ENV_EXPLORER_URL)]
         explorer_url: Option<Url>,
-
-        /// The maximum number of requests to process in each batch. Each batch is processed in a
-        /// single transaction.
-        #[arg(long = "batch-size", value_name = "USIZE", default_value = "32", env = ENV_BATCH_SIZE)]
-        batch_size: usize,
     },
 }
 
@@ -320,63 +293,28 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     network,
                     store_path,
                 },
-            token_symbol,
-            decimals,
-            max_supply,
             import_operator_account_path,
             faucet_account_id,
         } => {
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
 
-            // `--import` and `--faucet-account-id` require each other, so clap guarantees they are
-            // either both set or both unset.
-            let (faucet_account, operator_account, operator_secret) =
-                if let (Some(operator_account_path), Some(faucet_account_id)) =
-                    (import_operator_account_path, faucet_account_id)
-                {
-                    let operator_account_data = AccountFile::read(operator_account_path)
-                        .context("failed to read operator account data from file")?;
-                    let operator_secret = operator_account_data
-                        .auth_secret_keys
-                        .first()
-                        .context("auth secret key is required")?
-                        .clone();
-                    let (faucet_account_id, _) = AccountId::parse(&faucet_account_id)
-                        .context("failed to parse faucet account id")?;
-                    println!(
-                        "Using existing faucet account {} owned by operator account {}",
-                        faucet_account_id.to_hex(),
-                        operator_account_data.account.id(),
-                    );
-                    (
-                        FaucetAccount::Existing(faucet_account_id),
-                        operator_account_data.account,
-                        operator_secret,
-                    )
-                } else {
-                    println!("Generating new operator account.");
-                    let (operator_account, operator_secret) = create_faucet_operator_account()?;
+            let operator_account_data = AccountFile::read(import_operator_account_path)
+                .context("failed to read operator account data from file")?;
+            let operator_secret = operator_account_data
+                .auth_secret_keys
+                .first()
+                .context("auth secret key is required")?
+                .clone();
+            let (faucet_account_id, _) = AccountId::parse(&faucet_account_id)
+                .context("failed to parse faucet account id")?;
+            println!(
+                "Using existing faucet account {} owned by operator account {}",
+                faucet_account_id.to_hex(),
+                operator_account_data.account.id(),
+            );
+            let faucet_account = FaucetAccount::Existing(faucet_account_id);
+            let operator_account = operator_account_data.account;
 
-                    println!("Generating new faucet account. This may take a few seconds...");
-                    let token_symbol =
-                        token_symbol.expect("token_symbol should be present when not importing");
-                    let decimals = decimals.expect("decimals should be present when not importing");
-                    let max_supply =
-                        max_supply.expect("max_supply should be present when not importing");
-                    let fee_faucet_id = fetch_fee_faucet_id(&node_endpoint, timeout).await?;
-                    let faucet_account = create_network_faucet_account(
-                        token_symbol.as_str(),
-                        max_supply,
-                        decimals,
-                        operator_account.id(),
-                        fee_faucet_id,
-                    )?;
-                    (
-                        FaucetAccount::New(Box::new(faucet_account)),
-                        operator_account,
-                        operator_secret,
-                    )
-                };
             let faucet_config = FaucetConfig {
                 store_path,
                 node_endpoint,
@@ -430,6 +368,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
         },
 
         Command::Start {
+            funding_service_url,
             config:
                 ClientConfig {
                     node_url,
@@ -451,61 +390,58 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             base_amount,
             open_telemetry: _,
             explorer_url,
-            batch_size,
+            decimals,
         } => {
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
-            let config = FaucetConfig {
-                store_path: store_path.clone(),
-                node_endpoint: node_endpoint.clone(),
-                network_id: network.to_network_id()?,
-                timeout,
-                remote_tx_prover_url,
-            };
-            let mut faucet = Faucet::load(&config).await.context("failed to load faucet")?;
-            let issuance_receiver = faucet.subscribe_issuance();
-            let fee_parameters = faucet
-                .fee_parameters()
-                .await
-                .context("failed to read the chain's fee parameters")?;
-
-            tracing::info!(
-                target: COMPONENT,
-                {
-                    faucet.account.id = %faucet.faucet_id().account_id,
-                    operator.account.id = %faucet.operator_id(),
-                    node.endpoint = %node_endpoint,
-                    fee.faucet.id = %fee_parameters.fee_faucet_id(),
-                    fee.verification_base_fee = fee_parameters.verification_base_fee(),
-                    batch_size
-                },
-                "Faucet loaded",
-            );
+            let _ = remote_tx_prover_url;
 
             let store =
                 Arc::new(SqliteStore::new(store_path).await.context("failed to create store")?);
-
-            // Maximum of 1000 requests in-queue at once. Overflow is rejected for faster feedback.
-            let (tx_mint_requests, rx_mint_requests) = mpsc::channel(REQUESTS_QUEUE_SIZE);
 
             let api_keys = load_api_keys_from_store(&store)
                 .await
                 .context("failed to load API keys from store")?;
 
+            // The funding service is the only source of notes, so the faucet refuses to serve
+            // without it. Its status also bounds what the faucet may hand out.
+            let funding_service = FundingServiceClient::new(funding_service_url.clone(), timeout)?;
+            let funding_status = funding_service.status().await.with_context(|| {
+                format!("failed to reach the funding service at {funding_service_url}")
+            })?;
+
             let max_claimable_amount = AssetAmount::new(max_claimable_amount)?;
+            anyhow::ensure!(
+                max_claimable_amount.base_units() <= funding_status.max_amount,
+                "the maximum claimable amount {} exceeds the funding service's maximum of {}",
+                max_claimable_amount,
+                funding_status.max_amount,
+            );
+
+            tracing::info!(
+                target: COMPONENT,
+                {
+                    funding_service.url = %funding_service_url,
+                    funding_service.version = funding_status.version,
+                    funding.account.id = funding_status.account_id,
+                    funding.balance = funding_status.balance,
+                    funding.max_amount = funding_status.max_amount,
+                },
+                "Connected to the funding service",
+            );
+
             let rate_limiter_config = PoWRateLimiterConfig {
                 challenge_lifetime: pow_challenge_lifetime,
                 cleanup_interval: pow_cleanup_interval,
                 growth_rate: pow_growth_rate,
                 baseline: pow_baseline,
             };
-            let faucet_account = faucet.faucet_account().await.map_err(|error| *error)?;
-            let token_metadata = FungibleFaucet::try_from(faucet_account.storage())?;
-            let max_supply = AssetAmount::new(token_metadata.max_supply().as_u64())?;
-            let decimals = token_metadata.decimals();
+            // The funder account is what the notes are sent from, so its address is the one the
+            // frontend shows.
+            let (funder_account_id, _) = AccountId::parse(&funding_status.account_id)
+                .context("the funding service reported an unparsable account ID")?;
 
             let metadata = Metadata {
-                id: faucet.faucet_id(),
-                max_supply,
+                funder_account_id: FaucetId::new(funder_account_id, network.to_network_id()?),
                 decimals,
                 explorer_url,
                 base_amount,
@@ -517,25 +453,17 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 None => rand::random(),
             };
 
-            // We keep a channel sender open in the main thread to avoid the faucet closing before
-            // servers can propagate any errors.
-            let tx_mint_requests_clone = tx_mint_requests.clone();
             let api_server = ApiServer::new(
                 metadata,
                 max_claimable_amount,
-                tx_mint_requests_clone,
+                funding_service,
                 pow_secret,
                 rate_limiter_config,
                 &api_keys,
-                issuance_receiver,
             );
 
-            // Use select to concurrently:
-            // - Run and wait for the faucet (on current thread)
-            // - Run and wait for API server (in a spawned task)
-            // - Run and wait for frontend server (in a spawned task, only if set)
-            let faucet_future = faucet.run(rx_mint_requests, batch_size);
-
+            // Run the API server and, unless disabled, the frontend server, and fail as soon as
+            // either of them stops.
             let mut tasks = JoinSet::new();
             let mut tasks_ids = HashMap::new();
 
@@ -551,21 +479,13 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 tasks_ids.insert(frontend_id, "frontend");
             }
 
-            tokio::select! {
-                serve_result = tasks.join_next_with_id() => {
-                    let (id, err) = match serve_result.unwrap() {
-                        Ok((id, Ok(_))) => (id, Err(anyhow::anyhow!("completed unexpectedly"))),
-                        Ok((id, Err(err))) => (id, Err(err)),
-                        Err(join_err) => (join_err.id(), Err(join_err).context("failed to join task")),
-                    };
-                    let component = tasks_ids.get(&id).unwrap_or(&"unknown");
-                    err.context(format!("{component} server failed"))
-                },
-                faucet_result = faucet_future => {
-                    // Faucet completed, return its result
-                    faucet_result.context("faucet failed")
-                },
-            }?;
+            let (id, result) = match tasks.join_next_with_id().await.expect("a task was spawned") {
+                Ok((id, Ok(()))) => (id, Err(anyhow::anyhow!("completed unexpectedly"))),
+                Ok((id, Err(err))) => (id, Err(err)),
+                Err(join_err) => (join_err.id(), Err(join_err).context("failed to join task")),
+            };
+            let component = tasks_ids.get(&id).unwrap_or(&"unknown");
+            result.context(format!("{component} server failed"))?;
         },
     }
 
@@ -647,7 +567,8 @@ mod tests {
     use clap::Parser;
     use clap::error::ErrorKind;
     use fantoccini::ClientBuilder;
-    use miden_client::account::{AccountFile, AccountId, Address, NetworkId};
+    use miden_client::account::{AccountFile, AccountId};
+    use miden_client::address::{Address, NetworkId};
     use miden_client::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
     use miden_client_sqlite_store::SqliteStore;
     use rand::SeedableRng;
@@ -657,14 +578,74 @@ mod tests {
     use url::Url;
     use uuid::Uuid;
 
+    use crate::funding_service_client::FundingServiceClient;
     use crate::network::FaucetNetwork;
-    use crate::testing::stub_rpc_api::{serve_stub, serve_stub_with_fee};
+    use crate::testing::stub_funding_service::{STUB_MAX_AMOUNT, serve_stub_funding_service};
+    use crate::testing::stub_rpc_api::serve_stub;
     use crate::{Cli, ClientConfig, run_faucet_command};
 
     // CLI TESTS
     // ---------------------------------------------------------------------------------------------
 
     const TEST_FAUCET_ACCOUNT_ID: &str = "0xf640ba4c3fe40e710eb82764ff48e9";
+
+    /// The funding service is the only source of notes, so `start` cannot run without its URL.
+    #[test]
+    fn start_requires_a_funding_service_url() {
+        let Err(error) = Cli::try_parse_from(["miden-faucet", "start"]) else {
+            panic!("--funding-service-url should be required")
+        };
+        assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
+        assert!(error.to_string().contains("--funding-service-url"));
+    }
+
+    /// The token's decimals no longer come from a faucet account, so they must be configured.
+    #[test]
+    fn start_requires_the_token_decimals() {
+        let Err(error) = Cli::try_parse_from([
+            "miden-faucet",
+            "start",
+            "--funding-service-url",
+            "http://localhost:50401",
+        ]) else {
+            panic!("--decimals should be required")
+        };
+        assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
+        assert!(error.to_string().contains("--decimals"));
+    }
+
+    // FUNDING SERVICE TESTS
+    // ---------------------------------------------------------------------------------------------
+
+    /// A token request is answered with the note the funding service created.
+    #[tokio::test]
+    async fn get_tokens_returns_the_funding_services_note() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = Url::from_str(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
+        tokio::spawn(async move { serve_stub_funding_service(listener).await.unwrap() });
+
+        let funding_service = FundingServiceClient::new(url, Duration::from_secs(5)).unwrap();
+
+        let status = funding_service.status().await.expect("the stub serves a status");
+        assert_eq!(status.max_amount, STUB_MAX_AMOUNT);
+
+        let target = AccountId::try_from(ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE).unwrap();
+        let funding_response =
+            funding_service.request_funds(target, 1_000).await.expect("the stub funds it");
+
+        assert_eq!(
+            funding_response
+                .note
+                .assets()
+                .iter()
+                .next()
+                .unwrap()
+                .unwrap_fungible()
+                .amount()
+                .as_u64(),
+            1_000
+        );
+    }
 
     /// Parses an `init` invocation, with `args` appended to the fixed prefix.
     fn parse_init(args: &[&str]) -> Result<Cli, clap::Error> {
@@ -699,76 +680,6 @@ mod tests {
         }
     }
 
-    /// Importing an account and creating one are mutually exclusive.
-    #[test]
-    fn init_import_conflicts_with_token_metadata() {
-        for conflicting in [
-            vec!["--token-symbol", "TEST"],
-            vec!["--decimals", "6"],
-            vec!["--max-supply", "100"],
-        ] {
-            let mut args =
-                vec!["--import", "operator.mac", "--faucet-account-id", TEST_FAUCET_ACCOUNT_ID];
-            args.extend_from_slice(&conflicting);
-
-            let Err(error) = parse_init(&args) else {
-                panic!("{conflicting:?} should conflict with --import")
-            };
-            assert_eq!(error.kind(), ErrorKind::ArgumentConflict);
-        }
-    }
-
-    #[tokio::test]
-    async fn init_with_new_token() {
-        let stub_node_url = run_stub_node().await;
-        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
-        let result = Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
-            "init",
-            "--token-symbol",
-            "TEST",
-            "--decimals",
-            "6",
-            "--max-supply",
-            "100000000000000000",
-            "--node-url",
-            stub_node_url.to_string().as_str(),
-            "--store",
-            store_path.to_str().unwrap(),
-        ])))
-        .await;
-        assert!(result.is_ok(), "{:?}", result.err());
-    }
-
-    /// A new faucet account has to pay for its own deployment transaction, which it cannot do on
-    /// a chain that charges fees, so `init` refuses to create one there and points at importing.
-    #[tokio::test]
-    async fn init_with_new_token_fails_on_fee_charging_chain() {
-        let stub_node_url = run_fee_charging_stub_node(500).await;
-        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
-        let result = Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
-            "init",
-            "--token-symbol",
-            "TEST",
-            "--decimals",
-            "6",
-            "--max-supply",
-            "100000000000000000",
-            "--node-url",
-            stub_node_url.to_string().as_str(),
-            "--store",
-            store_path.to_str().unwrap(),
-        ])))
-        .await;
-
-        let error = format!("{:#}", result.expect_err("a new faucet cannot be deployed with fees"));
-        assert!(
-            error.contains("charges transaction fees") && error.contains("--import"),
-            "expected the fee-charging refusal, got: {error}"
-        );
-    }
-
     /// `--import` and `--faucet-account-id` together take the `FaucetAccount::Existing` path: the
     /// operator account is read from the file and the faucet account is fetched from the node
     /// instead of being created.
@@ -784,7 +695,8 @@ mod tests {
         // Write out an operator account file for `--import` to read.
         let operator_account_path = temp_dir().join(format!("{}.mac", Uuid::new_v4()));
         let (operator_account, operator_secret) =
-            crate::create_faucet_operator_account().expect("failed to create operator account");
+            miden_faucet_lib::create_faucet_operator_account()
+                .expect("failed to create operator account");
         AccountFile::new(operator_account, vec![operator_secret])
             .write(&operator_account_path)
             .expect("failed to write operator account file");
@@ -808,27 +720,6 @@ mod tests {
             error.contains("failed to fetch faucet account"),
             "expected the faucet account fetch to fail, got: {error}"
         );
-    }
-
-    #[tokio::test]
-    async fn serve_fails_without_init() {
-        let stub_node_url = run_stub_node().await;
-        let store_path = temp_dir().join(format!("{}.sqlite3", Uuid::new_v4()));
-
-        let result = Box::pin(run_faucet_command(Cli::parse_from([
-            "miden-faucet",
-            "start",
-            "--api-bind-port",
-            "8000",
-            "--frontend-bind-port",
-            "8081",
-            "--node-url",
-            stub_node_url.to_string().as_str(),
-            "--store",
-            store_path.to_str().unwrap(),
-        ])))
-        .await;
-        assert!(result.is_err());
     }
 
     // API KEY TESTS
@@ -921,16 +812,20 @@ mod tests {
         assert!(keys.is_empty());
     }
 
+    // TESTING HELPERS
+    // ---------------------------------------------------------------------------------------------
+
     // INTEGRATION TEST
     // ---------------------------------------------------------------------------------------------
 
-    /// This test starts a stub node, a faucet connected to the stub node, and a chromedriver
-    /// to test the faucet website. It then loads the website, mints tokens, and checks that all the
-    /// requests returned status 200.
+    /// Starts a stub node, a stub funding service, a faucet connected to both, and a chromedriver
+    /// to drive the faucet website. It loads the page, requests tokens, and checks that every
+    /// request returned a successful status.
     #[tokio::test]
-    async fn frontend_mint_tokens() {
+    async fn frontend_request_tokens() {
         let stub_node_url = run_stub_node().await;
-        let website_url = run_faucet_server(stub_node_url).await;
+        let funding_service_url = run_stub_funding_service().await;
+        let website_url = run_faucet_server(stub_node_url, funding_service_url);
         let client = start_fantoccini_client().await;
 
         // Open the website
@@ -978,7 +873,7 @@ mod tests {
             .await
             .unwrap();
 
-        // Click the send button
+        // Click the public note button
         client
             .find(fantoccini::Locator::Css("#send-button"))
             .await
@@ -1016,39 +911,15 @@ mod tests {
         stub_node_url
     }
 
-    /// Runs a stub node whose chain charges `verification_base_fee` per verification cycle.
-    async fn run_fee_charging_stub_node(verification_base_fee: u32) -> Url {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let listener_addr = listener.local_addr().unwrap();
-        let stub_node_url = Url::from_str(&format!("http://{listener_addr}")).unwrap();
-        tokio::spawn(
-            async move { serve_stub_with_fee(listener, verification_base_fee).await.unwrap() },
-        );
-        stub_node_url
-    }
-
-    async fn run_faucet_server(stub_node_url: Url) -> String {
+    /// Starts a faucet against the given stubs and returns its frontend URL.
+    fn run_faucet_server(stub_node_url: Url, funding_service_url: Url) -> String {
         let config = ClientConfig {
-            node_url: Some(stub_node_url.clone()),
+            node_url: Some(stub_node_url),
             timeout: Duration::from_secs(5),
             network: FaucetNetwork::Localhost,
             store_path: temp_dir().join(format!("{}.sqlite3", Uuid::new_v4())),
             remote_tx_prover_url: None,
         };
-
-        Box::pin(run_faucet_command(Cli {
-            command: crate::Command::Init {
-                config: config.clone(),
-                token_symbol: Some("TEST".to_owned()),
-                decimals: Some(6),
-                max_supply: Some(1_000_000_000_000),
-                import_operator_account_path: None,
-                faucet_account_id: None,
-            },
-        }))
-        .await
-        .expect("failed to create faucet account");
-
         let api_bind_port = 8000;
         let frontend_url = "http://localhost:8080";
 
@@ -1065,6 +936,8 @@ mod tests {
                 Box::pin(run_faucet_command(Cli {
                     command: crate::Command::Start {
                         config,
+                        funding_service_url,
+                        decimals: 6,
                         api_bind_port,
                         api_public_url: Url::parse(&format!("http://localhost:{api_bind_port}"))
                             .unwrap(),
@@ -1079,7 +952,6 @@ mod tests {
                         base_amount: 100_000,
                         open_telemetry: false,
                         explorer_url: None,
-                        batch_size: 8,
                     },
                 }))
                 .await
@@ -1124,5 +996,12 @@ mod tests {
             .connect(&format!("http://localhost:{chromedriver_port}"))
             .await
             .expect("failed to connect to WebDriver")
+    }
+
+    async fn run_stub_funding_service() -> Url {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = Url::from_str(&format!("http://{}", listener.local_addr().unwrap())).unwrap();
+        tokio::spawn(async move { serve_stub_funding_service(listener).await.unwrap() });
+        url
     }
 }

@@ -18,7 +18,6 @@ workspace = true
 # Miden dependencies.
 miden-client              = { features = ["tonic"], workspace = true }
 miden-client-sqlite-store = { workspace = true }
-miden-tx                  = { workspace = true }
 
 # External dependencies.
 anyhow    = { workspace = true }
