@@ -35,16 +35,29 @@ compose() {
 
 case "${1:-}" in
     up)
-        if [[ ! -d "${CHECKOUT}" ]]; then
+        if [[ ! -f "${CHECKOUT}/docker-compose.yml" ]]; then
             echo "Cloning the node repo at v${VERSION}"
+            rm -rf "${CHECKOUT}"
             git clone --depth 1 --branch "v${VERSION}" https://github.com/0xMiden/node "${CHECKOUT}"
         fi
         # Starting the funding service pulls in everything it depends on: the genesis bootstrap,
         # the validators, the sequencer and the prover.
         compose up --detach funding-service
         ;;
-    down) compose down --volumes --remove-orphans ;;
-    logs) compose logs --no-color ;;
+    down)
+        if [[ ! -f "${CHECKOUT}/docker-compose.yml" ]]; then
+            echo "Nothing to stop: ${CHECKOUT} does not exist"
+            exit 0
+        fi
+        compose down --volumes --remove-orphans
+        ;;
+    logs)
+        if [[ ! -f "${CHECKOUT}/docker-compose.yml" ]]; then
+            echo "No logs: ${CHECKOUT} does not exist"
+            exit 0
+        fi
+        compose logs --no-color
+        ;;
     *)
         echo "usage: $0 up|down|logs" >&2
         exit 2

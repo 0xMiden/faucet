@@ -48,7 +48,7 @@ jobs:
 
       - name: Faucet logs
         if: failure()
-        run: cat target/e2e/faucet.log
+        run: cat target/e2e/faucet.log || true
 
       - name: Network logs
         if: failure()
