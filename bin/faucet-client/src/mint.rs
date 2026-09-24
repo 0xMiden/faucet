@@ -136,10 +136,8 @@ impl MintCmd {
 
         let note_record = note_record.ok_or_else(|| {
             MintClientError::NoteNotFound(format!(
-                "Note {note_id_hex} not found after {MAX_SYNC_RETRIES} sync attempts over \
-                 {}s. You can manually consume it later using: \
-                 miden-client consume-notes {note_id_hex}",
-                u64::from(MAX_SYNC_RETRIES) * SYNC_RETRY_DELAY_SECS
+                "Note {note_id_hex} not found after {MAX_SYNC_RETRIES} sync attempts. \
+                 You can manually consume it later using: miden-client consume-notes {note_id_hex}"
             ))
         })?;
 
