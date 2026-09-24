@@ -170,14 +170,14 @@ export class UIController {
 
         const errorMessage = document.getElementById('home-error-message');
         errorMessage.classList.remove('pending');
-        errorMessage.style.display = 'flex';
+        errorMessage.classList.add('visible');
     }
 
     hideErrors() {
         this.hideIcons();
 
         const errorMessage = document.getElementById('home-error-message');
-        errorMessage.style.display = 'none';
+        errorMessage.classList.remove('visible');
         errorMessage.classList.remove('pending');
     }
 

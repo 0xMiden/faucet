@@ -190,6 +190,7 @@ body {
 }
 
 .col {
+    position: relative;
     width: 100%;
     max-width: var(--column);
     margin-top: 16px;
@@ -410,8 +411,15 @@ body {
 }
 
 /* Errors */
+/* Sits below the column, out of the flow, so showing an error moves nothing and the page keeps
+   its height. The slack `.meta-chips` leaves above itself is what it occupies. */
 .error-message {
-    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    display: flex;
+    visibility: hidden;
     flex-direction: column;
     align-items: center;
     gap: 8px;
@@ -424,6 +432,10 @@ body {
     font-size: 14px;
     text-align: center;
     white-space: pre-wrap;
+}
+
+.error-message.visible {
+    visibility: visible;
 }
 
 .error-message svg {
