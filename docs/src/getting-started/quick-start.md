@@ -52,8 +52,7 @@ Open `http://localhost:8080` in your browser to access the web interface for gen
 
 1. Enter your Miden account ID or account bech32 address.
 2. Select token amount
-3. Choose note type (private or public)
-4. Submit request
+3. Submit request
 
 ### Via API
 

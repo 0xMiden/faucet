@@ -11,7 +11,7 @@ use miden_faucet_lib::requests::{
     MintRequest,
     MintRequestSender,
 };
-use miden_faucet_lib::types::{AssetAmount, AssetAmountError, NoteType};
+use miden_faucet_lib::types::{AssetAmount, AssetAmountError};
 use miden_pow_rate_limiter::ChallengeError;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::oneshot;
@@ -28,7 +28,6 @@ use crate::api_key::ApiKey;
     parent = None, target = COMPONENT, name = "server.get_tokens", skip_all, err,
     fields(
         account_id = %request.account_id,
-        is_private_note = %request.is_private_note,
         asset_amount = %request.asset_amount,
     )
 )]
@@ -199,12 +198,6 @@ fn validate_get_tokens_params(
     params: &GetTokensQueryParams,
     server: &ApiServer,
 ) -> Result<MintRequest, MintRequestError> {
-    let note_type = if params.is_private_note {
-        NoteType::Private
-    } else {
-        NoteType::Public
-    };
-
     let account_id = if params.account_id.starts_with("0x") {
         AccountId::from_hex(&params.account_id).map_err(AccountError::ParseId)
     } else {
@@ -245,5 +238,5 @@ fn validate_get_tokens_params(
         request_complexity,
     )?;
 
-    Ok(MintRequest { account_id, note_type, asset_amount })
+    Ok(MintRequest { account_id, asset_amount })
 }

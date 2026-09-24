@@ -103,7 +103,7 @@
                         <div class="status-badge spin-ring" aria-hidden="true">
                             <div class="spinner"></div>
                         </div>
-                        <div class="kicker"><span id="modal-note-type"></span> note</div>
+                        <div class="kicker">Public note</div>
                         <h2 id="minting-title">Minting Tokens</h2>
                         <div class="amount-line">
                             <span><span id="modal-token-amount"></span> tokens</span>
@@ -137,71 +137,6 @@
                     </div>
                 </section>
 
-                <!-- Private note minted -->
-                <section class="view status-view" id="completed-private-modal">
-                    <div class="status-hero">
-                        <div class="status-badge" id="private-success-tick" aria-hidden="true"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg></div>
-                        <div class="kicker">Private note</div>
-                        <h2>Tokens Minted!</h2>
-                        <div class="amount-line">
-                            <span><span id="completed-private-token-amount"></span> tokens</span>
-                            <span class="to">to</span>
-                            <span class="address" id="completed-private-recipient-address"></span>
-                        </div>
-                        <p class="status-note" id="private-minted-subtitle">Go to your <strong>Miden Wallet</strong> to claim.</p>
-                    </div>
-                    <div class="result-actions">
-                        <button type="button" class="line-button fill" id="private-download-button" style="display: none;">
-                            <span class="line-button-inner"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg> Download Note</span>
-                        </button>
-                        <button type="button" class="line-button quiet" id="private-explorer-button">
-                            <span class="line-button-inner">View Transaction on Explorer <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" /></svg></span>
-                        </button>
-                    </div>
-
-                    <div class="next-steps" id="next-steps">
-                        <h3 id="next-steps-title">If you have trouble claiming the tokens</h3>
-                        <div id="next-steps-list">
-                            <div class="step" id="save-note-step">
-                                <div class="step-row">
-                                    <span class="step-number">1</span>
-                                    <span class="step-text"><strong>Save the downloaded note file</strong> somewhere safe. You'll need
-                                        this file to import the note into your wallet.</span>
-                                </div>
-                            </div>
-                            <div class="step" id="download-note-step">
-                                <div class="step-row">
-                                    <span class="step-number">1</span>
-                                    <span class="step-text">
-                                        <button type="button" class="download-button" id="instructions-download-button"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg><strong>Download Note</strong></button>
-                                        and save it somewhere safe. You'll need this file to import the note into your wallet.
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="step">
-                                <div class="step-row">
-                                    <span class="step-number">2</span>
-                                    <span class="step-text">Open your wallet and go to the <strong>Receive</strong> section.</span>
-                                </div>
-                            </div>
-                            <div class="step">
-                                <div class="step-row">
-                                    <span class="step-number">3</span>
-                                    <span class="step-text">Upload the note file to make the tokens available in your wallet.</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="safe-note" id="warning-text">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6.5V12c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6.5L12 3Z" /></svg>
-                        Important: if you lose this note file, your tokens cannot be recovered. Keep it safe and do not share it.
-                    </div>
-
-                    <button type="button" class="line-button quiet" id="private-close-button">
-                        <span class="line-button-inner">Send another</span>
-                    </button>
-                </section>
             </div>
 
 

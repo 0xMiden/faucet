@@ -3,7 +3,7 @@ import { PrivateDataPermission, WalletAdapterNetwork, WalletReadyState } from "@
 import { Endpoint, NoteId, RpcClient, getWasmOrThrow } from "@miden-sdk/miden-sdk/lazy";
 import { Utils } from './utils.js';
 import { UIController } from './ui.js';
-import { getConfig, getMetadata, getPowChallenge, getTokens, get_note, send_note } from "./api.js";
+import { getConfig, getMetadata, getPowChallenge, getTokens } from "./api.js";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -89,7 +89,7 @@ export class MidenFaucetApp {
     }
 
     setupEventListeners() {
-        const onSendTokens = (isPrivateNote) => this.handleSendTokens(isPrivateNote);
+        const onSendTokens = () => this.handleSendTokens();
         const onWalletConnect = () => this.handleWalletButtonClick();
         const onTokenSelect = (requestedAmount) => this.updateTokenHint(requestedAmount);
         this.ui.setupEventListeners(onSendTokens, onWalletConnect, onTokenSelect);
@@ -120,7 +120,7 @@ export class MidenFaucetApp {
         }
     }
 
-    async handleSendTokens(isPrivateNote) {
+    async handleSendTokens() {
         try {
             const { recipient, amount, amountAsTokens } = this.ui.getFormData();
 
@@ -138,46 +138,16 @@ export class MidenFaucetApp {
             }
 
             this.ui.hideErrors();
-            this.ui.showMintingModal(recipient, amountAsTokens, isPrivateNote);
+            this.ui.showMintingModal(recipient, amountAsTokens);
 
             const powData = await getPowChallenge(this.apiUrl, recipient, amount);
             const nonce = await this.findValidNonce(powData.challenge, powData.target);
 
-            const getTokensResponse = await getTokens(this.apiUrl, powData.challenge, nonce, recipient, amount, isPrivateNote);
+            const getTokensResponse = await getTokens(this.apiUrl, powData.challenge, nonce, recipient, amount);
 
             await this.pollNote(getTokensResponse.note_id);
 
-            if (isPrivateNote) {
-                this.ui.showCompletedPrivateModal(recipient, amountAsTokens, getTokensResponse.tx_id);
-
-                // If wallet is connected and address matches, try direct import
-                let noteImported = false;
-                if (this.walletAdapter.connected && this.walletAdapter.address && Utils.idFromBech32(this.walletAdapter.address) === Utils.idFromBech32(recipient)) {
-                    this.ui.setPrivateMintedSubtitle('Please check your <strong>Miden Wallet</strong> to accept the import...');
-                    noteImported = await this.importNoteToWallet(getTokensResponse.note_id);
-                    if (noteImported) {
-                        this.ui.setPrivateMintedSubtitle('Go to your <strong>Miden Wallet</strong> to claim.');
-                        this.ui.showCloseButton();
-                    }
-                }
-
-                if (!noteImported) {
-                    // Send through the note transport layer
-                    this.ui.setPrivateMintedSubtitle('Sending note to your wallet...');
-                    const noteSent = await this.sendNoteToClient(getTokensResponse.note_id);
-                    if (noteSent) {
-                        this.ui.setPrivateMintedSubtitle('Go to your <strong>Miden Wallet</strong> to claim.');
-                        this.ui.showOptionalDownload(() => this.downloadNote(getTokensResponse.note_id));
-                        this.ui.showCloseButton();
-                    } else {
-                        // if note transport failed, show the download button
-                        this.ui.setPrivateMintedSubtitle('Follow the instructions to claim.');
-                        this.ui.showDownload(() => this.downloadNote(getTokensResponse.note_id));
-                    }
-                }
-            } else {
-                this.ui.showCompletedPublicModal(recipient, amountAsTokens, getTokensResponse.tx_id);
-            }
+            this.ui.showCompletedPublicModal(recipient, amountAsTokens, getTokensResponse.tx_id);
         } catch (error) {
             this.ui.hideMintingModal();
             this.handleApiError(error, 'Request failed', error.message);
@@ -262,47 +232,6 @@ export class MidenFaucetApp {
         }
 
         return estimatedTime;
-    }
-
-    async importNoteToWallet(noteId) {
-        try {
-            const data = await get_note(this.apiUrl, noteId);
-
-            // Prevent hanging if the user doesn't see or respond to the wallet popup
-            const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Import timeout')), 60000);
-            });
-
-            await Promise.race([
-                this.walletAdapter.importPrivateNote(data),
-                timeoutPromise
-            ]);
-            return true;
-        } catch (error) {
-            console.log("Wallet integration not available:", error);
-            return false;
-        }
-    }
-
-    async sendNoteToClient(noteId) {
-        try {
-            await send_note(this.apiUrl, noteId);
-            return true;
-        } catch (error) {
-            console.log("Note transport layer not available:", error);
-            return false;
-        }
-    }
-
-    async downloadNote(noteId) {
-        try {
-            const data = await get_note(this.apiUrl, noteId);
-            const blob = new Blob([data], { type: 'application/octet-stream' });
-            Utils.downloadBlob(blob, 'note.mno');
-        } catch (error) {
-            console.error('Error downloading note:', error);
-            this.handleApiError(error, 'Download failed', error.message);
-        }
     }
 
     pollNote(noteId) {

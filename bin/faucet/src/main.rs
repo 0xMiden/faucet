@@ -15,7 +15,6 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use miden_client::account::component::FungibleFaucet;
 use miden_client::account::{AccountFile, AccountId};
-use miden_client::note_transport::grpc::GrpcNoteTransportClient;
 use miden_client::rpc::Endpoint;
 use miden_client::store::{SettingScope, Store};
 use miden_client_sqlite_store::SqliteStore;
@@ -73,7 +72,6 @@ const ENV_FAUCET_ACCOUNT_ID: &str = "MIDEN_FAUCET_FAUCET_ACCOUNT_ID";
 const ENV_TOKEN_SYMBOL: &str = "MIDEN_FAUCET_TOKEN_SYMBOL";
 const ENV_DECIMALS: &str = "MIDEN_FAUCET_DECIMALS";
 const ENV_MAX_SUPPLY: &str = "MIDEN_FAUCET_MAX_SUPPLY";
-const ENV_NOTE_TRANSPORT_URL: &str = "MIDEN_FAUCET_NOTE_TRANSPORT_URL";
 
 // COMMANDS
 // ================================================================================================
@@ -226,10 +224,6 @@ pub enum Command {
         /// single transaction.
         #[arg(long = "batch-size", value_name = "USIZE", default_value = "32", env = ENV_BATCH_SIZE)]
         batch_size: usize,
-
-        /// Note transport endpoint. If not set, no note transport will be used.
-        #[arg(long = "note-transport-url", value_name = "URL", env = ENV_NOTE_TRANSPORT_URL)]
-        note_transport_url: Option<Url>,
     },
 }
 
@@ -458,7 +452,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             open_telemetry: _,
             explorer_url,
             batch_size,
-            note_transport_url,
         } => {
             let node_endpoint = parse_node_endpoint(node_url, &network)?;
             let config = FaucetConfig {
@@ -481,7 +474,6 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                     faucet.account.id = %faucet.faucet_id().account_id,
                     operator.account.id = %faucet.operator_id(),
                     node.endpoint = %node_endpoint,
-                    note_transport.url = ?note_transport_url.as_ref().map(Url::as_str),
                     fee.faucet.id = %fee_parameters.fee_faucet_id(),
                     fee.verification_base_fee = fee_parameters.verification_base_fee(),
                     batch_size
@@ -511,20 +503,12 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             let max_supply = AssetAmount::new(token_metadata.max_supply().as_u64())?;
             let decimals = token_metadata.decimals();
 
-            let note_transport_client = note_transport_url.as_ref().map(|url| {
-                Arc::new(GrpcNoteTransportClient::new(
-                    url.to_string(),
-                    timeout.as_millis().try_into().expect("timeout should fit into u64"),
-                ))
-            });
-
             let metadata = Metadata {
                 id: faucet.faucet_id(),
                 max_supply,
                 decimals,
                 explorer_url,
                 base_amount,
-                note_transport_url,
             };
 
             // Use a random secret if not explicitly provided.
@@ -543,9 +527,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 pow_secret,
                 rate_limiter_config,
                 &api_keys,
-                note_transport_client,
                 issuance_receiver,
-                faucet.p2id_notes(),
             );
 
             // Use select to concurrently:
@@ -1098,7 +1080,6 @@ mod tests {
                         open_telemetry: false,
                         explorer_url: None,
                         batch_size: 8,
-                        note_transport_url: None,
                     },
                 }))
                 .await

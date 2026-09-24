@@ -18,7 +18,6 @@ The high-level structure of the project looks like follows:
 - **Features**: 
   - Token amount selection
   - Address input
-  - Public/private note selection
   - PoW challenge solving
   - Request status display
 
@@ -73,7 +72,7 @@ The basic HTTP requests for minting tokens involves `/pow` and `/get_tokens`. Th
 - **Token Distribution**
    - Validated request processed
    - Token transaction created
-   - Note generated (public or private)
+   - A public P2ID note is generated
    - Transaction is created, executed, and stored in the local database
    - Transaction is proven and submitted to Miden Node
 

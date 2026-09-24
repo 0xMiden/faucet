@@ -247,7 +247,6 @@ impl FaucetHttpClient {
         let params = GetTokensQueryParams {
             account_id: account_id.to_hex(),
             asset_amount: amount,
-            is_private_note: false,
             challenge: challenge.to_owned(),
             nonce,
             api_key: self.api_key.clone(),

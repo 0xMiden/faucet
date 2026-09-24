@@ -45,7 +45,6 @@ For detailed information about the token request flow, see the [Architecture](./
 
 - **Query Parameters**:
   - `account_id` (string, required): The account ID requesting tokens
-  - `is_private_note` (boolean, required): Whether to create a private note
   - `asset_amount` (number, required): Requested asset amount (in base units)
   - `challenge` (string, required): The encoded challenge from the `/pow` endpoint
   - `nonce` (number, required): The nonce used to solve the challenge
@@ -67,20 +66,6 @@ For detailed information about the token request flow, see the [Architecture](./
   - `max_supply` (number): maximum available supply of the faucet (in base units)
   - `decimals` (number): number of decimals of the token minted by the faucet. It is needed to convert base units into token amounts.
   - `explorer_url` (string): URL to view the transaction in the explorer. Only present if available for the current network.
-  - `note_transport_url` (string): URL of the note transport layer (NTL) endpoint used by the faucet. Only present if the faucet was configured with `--note-transport-url`.
-
-### Get Note
-
-**Endpoint**: `GET /get_note`
-
-- **Purpose**: Request a specific note by its ID
-
-- **Query Parameters**:
-  - `note_id` (string, required): The ID of the note to retrieve
-
-- **Response**: JSON object containing:
-  - `note_id` (string): The ID of the requested note
-  - `data_base64` (string): The note data encoded in base64 format. This data should be decoded and saved as a file with `.mno` extension and `application/octet-stream` media type
 
 ## Rate Limiting
 
