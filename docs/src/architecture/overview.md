@@ -78,7 +78,7 @@ The basic HTTP requests for minting tokens involves `/pow` and `/get_tokens`. Th
    - The funding service creates a public P2ID note addressed to the recipient
 
 - **Response**
-   - Transaction ID and Note ID returned
+   - Note ID returned
 
 ## Why do we need a backend?
 

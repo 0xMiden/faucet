@@ -146,7 +146,7 @@ export class MidenFaucetApp {
 
             await this.pollNote(getTokensResponse.note_id);
 
-            this.ui.showCompletedPublicModal(recipient, amountAsTokens, getTokensResponse.tx_id);
+            this.ui.showCompletedPublicModal(recipient, amountAsTokens, getTokensResponse.note_id);
 
             // The funding account just paid out, so refresh what it has left.
             this.fetchMetadata().catch((error) => {

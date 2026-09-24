@@ -79,23 +79,23 @@ export class UIController {
         mintingModal.classList.remove('active');
     }
 
-    setupExplorerButton(explorerButton, txId) {
+    setupExplorerButton(explorerButton, noteId) {
         if (this.explorerUrl) {
             explorerButton.style.display = 'block';
-            explorerButton.onclick = () => window.open(`${this.explorerUrl}/tx/${txId}`, '_blank');
+            explorerButton.onclick = () => window.open(`${this.explorerUrl}/note/${noteId}`, '_blank');
         } else {
             explorerButton.style.display = 'none';
         }
     }
 
-    showCompletedPublicModal(recipient, amountAsTokens, txId) {
+    showCompletedPublicModal(recipient, amountAsTokens, noteId) {
         document.getElementById('completed-public-token-amount').textContent = amountAsTokens;
         document.getElementById('completed-public-recipient-address').textContent = recipient;
         const completedPublicModal = document.getElementById('completed-public-modal');
         completedPublicModal.classList.add('active');
 
         const publicExplorerButton = document.getElementById('public-explorer-button');
-        this.setupExplorerButton(publicExplorerButton, txId);
+        this.setupExplorerButton(publicExplorerButton, noteId);
         completedPublicModal.onclick = (e) => {
             if (e.target !== publicExplorerButton) {
                 this.hideModals();
@@ -170,14 +170,14 @@ export class UIController {
 
         const errorMessage = document.getElementById('home-error-message');
         errorMessage.classList.remove('pending');
-        errorMessage.style.display = 'flex';
+        errorMessage.classList.add('visible');
     }
 
     hideErrors() {
         this.hideIcons();
 
         const errorMessage = document.getElementById('home-error-message');
-        errorMessage.style.display = 'none';
+        errorMessage.classList.remove('visible');
         errorMessage.classList.remove('pending');
     }
 

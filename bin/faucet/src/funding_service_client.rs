@@ -10,7 +10,6 @@ use anyhow::Context;
 use axum::http::StatusCode;
 use miden_protocol::account::AccountId;
 use miden_protocol::note::Note;
-use miden_protocol::transaction::TransactionId;
 use miden_protocol::utils::serde::Deserializable;
 use serde::Deserialize;
 use tracing::instrument;
@@ -144,14 +143,12 @@ pub struct FundingServiceStatus {
     pub max_amount: u64,
 }
 
-/// The funding service's `/request-funds` response: the queued P2ID note and the transaction
-/// which will create it. The service sends both as hexadecimal of their serialized form.
+/// The funding service's `/request-funds` response: the queued P2ID note, as hexadecimal of its
+/// serialized form.
 #[derive(Debug, Deserialize)]
 pub struct RequestFundsResponse {
     #[serde(deserialize_with = "deserialize_hex")]
     pub note: Note,
-    #[serde(deserialize_with = "deserialize_hex")]
-    pub transaction_id: TransactionId,
 }
 
 /// Deserializes one of the funding service's hexadecimal fields into its domain type.

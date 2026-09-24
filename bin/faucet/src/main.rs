@@ -198,8 +198,8 @@ pub enum ApiKeyCommand {
 #[derive(Parser, Debug, Clone)]
 pub struct FaucetConfig {
     /// Path to the file holding the API keys, one key per line.
-    #[arg(long = "api-keys-file", value_name = "FILE", default_value = DEFAULT_API_KEYS_PATH, env = ENV_API_KEYS)]
-    api_keys_path: PathBuf,
+    #[arg(long = "api-keys-file", value_name = "FILE", env = ENV_API_KEYS)]
+    api_keys_path: Option<PathBuf>,
 
     /// Timeout for attempting to connect to the node.
     #[arg(long = "timeout", value_name = "DURATION", default_value = "5s", env = ENV_TIMEOUT, value_parser = humantime::parse_duration)]
@@ -300,9 +300,12 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
         } => {
             let node_url = parse_node_url(node_url, &network)?;
 
-            let api_keys = load_api_keys_from_file(&api_keys_path)
-                .await
-                .context("failed to load the API keys")?;
+            let api_keys = match api_keys_path {
+                Some(path) => {
+                    load_api_keys_from_file(&path).await.context("failed to load the API keys")?
+                },
+                None => Vec::new(),
+            };
 
             // The funding service is the only source of notes, so the faucet refuses to serve
             // without it. Its status also bounds what the faucet may hand out.
@@ -751,7 +754,7 @@ mod tests {
             node_url: Some(stub_node_url),
             timeout: Duration::from_secs(5),
             network: FaucetNetwork::Localhost,
-            api_keys_path,
+            api_keys_path: Some(api_keys_path),
         };
         let api_bind_port = 8000;
         let frontend_url = "http://localhost:8080";

@@ -51,7 +51,6 @@ For detailed information about the token request flow, see the [Architecture](./
   - `api_key` (string, optional): API key for authentication
 
 - **Response**: JSON object containing:
-  - `tx_id` (string): ID of the created transaction
   - `note_id` (string): ID of the created note
 
 ### Get Metadata
