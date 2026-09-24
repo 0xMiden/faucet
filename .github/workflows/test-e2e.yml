@@ -1,4 +1,7 @@
 # Runs the faucet against a real node and funding service.
+#
+# The setup is split across steps so a failure points at the part that broke: pulling the images,
+# starting the network, starting the faucet, or the request itself.
 
 name: test-e2e
 
@@ -25,10 +28,27 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/next' }}
-      # Brings up the node's compose stack from published images, runs the test against it, and
-      # tears it down again.
-      - name: Run the end-to-end test
-        run: make test-e2e
+
+      - name: Build the faucet and its client
+        run: cargo build --locked -p miden-faucet -p miden-faucet-client
+
+      - name: Start the node and the funding service
+        run: make e2e-network-up
+
+      - name: Start the faucet
+        run: make e2e-faucet-up
+
+      - name: Request tokens
+        run: make e2e-request-tokens
+
+      - name: Faucet logs
+        if: failure()
+        run: cat target/e2e/faucet.log
+
       - name: Network logs
         if: failure()
         run: make e2e-network-logs
+
+      - name: Stop everything
+        if: always()
+        run: make e2e-faucet-down e2e-network-down
