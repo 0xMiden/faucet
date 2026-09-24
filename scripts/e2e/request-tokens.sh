@@ -15,7 +15,7 @@ CLIENT_BIN="${CLIENT_BIN:-./target/release/miden-faucet-client}"
 WORK_DIR="${WORK_DIR:-target/e2e}"
 MIDEN_CLIENT_BIN="${MIDEN_CLIENT_BIN:-${WORK_DIR}/bin/miden-client}"
 FAUCET_URL="${FAUCET_URL:-http://127.0.0.1:18000}"
-NODE_URL="${NODE_URL:-http://127.0.0.1:57391}"
+NODE_URL="${NODE_URL:-http://127.0.0.1:57291}"
 # Bech32 prefix the faucet uses for a local network, so the client prints matching addresses.
 NETWORK_ID="${NETWORK_ID:-mlcl}"
 # Consuming the note pays a fee out of the note itself, so a request too small to cover the fee

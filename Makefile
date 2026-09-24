@@ -78,63 +78,20 @@ book: ## Builds the book & serves documentation site
 test:  ## Runs all tests
 	cargo nextest run --release --all-features --workspace
 
-# The end-to-end test runs the faucet against a real node and funding service, taken from the node
-# repo's compose stack. The version follows the `miden-node-proto-build` pin, so bumping that
-# dependency moves the whole network with it and nothing here needs editing.
-NODE_VERSION = $(shell sed -n 's/^miden-node-proto-build *= *{ *version *= *"=\{0,1\}\([^"]*\)".*/\1/p' bin/faucet/Cargo.toml)
-
-NODE_CHECKOUT = target/e2e/node-$(NODE_VERSION)
-NODE_REGISTRY = ghcr.io/0xmiden
-E2E_IMAGES = MIDEN_NODE_IMAGE=$(NODE_REGISTRY)/miden-node:v$(NODE_VERSION) \
-             MIDEN_VALIDATOR_IMAGE=$(NODE_REGISTRY)/miden-validator:v$(NODE_VERSION) \
-             MIDEN_NTX_BUILDER_IMAGE=$(NODE_REGISTRY)/miden-ntx-builder:v$(NODE_VERSION) \
-             MIDEN_REMOTE_PROVER_IMAGE=$(NODE_REGISTRY)/miden-remote-prover:v$(NODE_VERSION) \
-             MIDEN_FUNDING_SERVICE_IMAGE=$(NODE_REGISTRY)/miden-funding-service:v$(NODE_VERSION) \
-             MIDEN_USDCX_GENESIS_IMAGE=$(NODE_REGISTRY)/miden-usdcx-genesis:v$(NODE_VERSION)
-E2E_COMPOSE = $(E2E_IMAGES) docker compose --project-name miden-faucet-e2e -f $(NODE_CHECKOUT)/docker-compose.yml -f docker-compose.e2e.yml
-
-$(NODE_CHECKOUT):
-	git clone --depth 1 --branch v$(NODE_VERSION) https://github.com/0xMiden/node $(NODE_CHECKOUT)
-
-.PHONY: e2e-network-up
-e2e-network-up: $(NODE_CHECKOUT) ## Starts the node and funding service the end-to-end test needs
-	$(E2E_COMPOSE) up --detach funding-service
-
-.PHONY: e2e-network-down
-e2e-network-down: ## Stops the end-to-end network and deletes its data
-	$(E2E_COMPOSE) down --volumes --remove-orphans
-
-.PHONY: e2e-network-logs
-e2e-network-logs: ## Prints the logs of the end-to-end network
-	$(E2E_COMPOSE) logs --no-color
-
-# One invocation for both binaries, so nothing is compiled twice under two feature resolutions.
-# The other targets assume the binaries are there, which keeps each of them to the work its name
-# describes.
-.PHONY: e2e-build
-e2e-build: ## Builds the binaries the end-to-end test runs
-	cargo build --release --locked -p miden-faucet -p miden-faucet-client
-
-.PHONY: e2e-faucet-up
-e2e-faucet-up: ## Starts a faucet against the end-to-end network
-	scripts/e2e-faucet.sh up
-
-.PHONY: e2e-faucet-down
-e2e-faucet-down: ## Stops the faucet started for the end-to-end test
-	scripts/e2e-faucet.sh down
-
-.PHONY: e2e-miden-client
-e2e-miden-client: ## Downloads the Miden client CLI the end-to-end test uses
-	scripts/e2e-miden-client.sh
-
-.PHONY: e2e-request-tokens
-e2e-request-tokens: ## Requests tokens from the end-to-end faucet and consumes the note
-	scripts/e2e-request-tokens.sh
-
+# The end-to-end test starts a real node, funding service and faucet, requests tokens and consumes
+# the resulting note. Each part is a script of its own so CI can run them as separate steps and see
+# which one failed; this target chains them for a developer who just wants to run the whole thing.
 .PHONY: test-e2e
-test-e2e: e2e-build e2e-network-up e2e-miden-client e2e-faucet-up ## Runs the end-to-end test against a real node and funding service
-	$(MAKE) e2e-request-tokens; \
-	    status=$$?; $(MAKE) e2e-faucet-down e2e-network-down; exit $$status
+test-e2e: ## Runs the end-to-end test against a real node and funding service
+	cargo build --release --locked -p miden-faucet -p miden-faucet-client
+	scripts/e2e/miden-client.sh
+	scripts/e2e/network.sh up
+	scripts/e2e/faucet.sh up
+	scripts/e2e/request-tokens.sh; \
+	    status=$$?; \
+	    scripts/e2e/faucet.sh down; \
+	    scripts/e2e/network.sh down; \
+	    exit $$status
 
 # --- checking ------------------------------------------------------------------------------------
 

@@ -9,8 +9,8 @@ set -euo pipefail
 
 FAUCET_BIN="${FAUCET_BIN:-./target/release/miden-faucet}"
 FAUCET_URL="${FAUCET_URL:-http://127.0.0.1:18000}"
-NODE_URL="${NODE_URL:-http://127.0.0.1:57391}"
-FUNDING_SERVICE_URL="${FUNDING_SERVICE_URL:-http://127.0.0.1:50501}"
+NODE_URL="${NODE_URL:-http://127.0.0.1:57291}"
+FUNDING_SERVICE_URL="${FUNDING_SERVICE_URL:-http://127.0.0.1:50401}"
 DECIMALS="${DECIMALS:-6}"
 
 WORK_DIR="${WORK_DIR:-target/e2e}"
