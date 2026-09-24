@@ -411,8 +411,6 @@ body {
 }
 
 /* Errors */
-/* Sits below the column, out of the flow, so showing an error moves nothing and the page keeps
-   its height. The slack `.meta-chips` leaves above itself is what it occupies. */
 .error-message {
     position: absolute;
     top: 100%;

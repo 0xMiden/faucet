@@ -144,8 +144,7 @@ pub struct FundingServiceStatus {
 }
 
 /// The funding service's `/request-funds` response: the queued P2ID note, as hexadecimal of its
-/// serialized form. The transaction which creates it does not exist yet, so the service names
-/// neither it nor the block the note lands in.
+/// serialized form.
 #[derive(Debug, Deserialize)]
 pub struct RequestFundsResponse {
     #[serde(deserialize_with = "deserialize_hex")]
