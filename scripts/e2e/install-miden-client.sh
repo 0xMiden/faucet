@@ -2,10 +2,6 @@
 #
 # Downloads the `miden-client` CLI the end-to-end test uses to create the recipient account and to
 # read its balance.
-#
-# The release assets are prebuilt, so this takes a couple of seconds instead of the several minutes
-# `cargo install miden-client-cli` needs. The version comes from the `miden-client` pin in the
-# workspace `Cargo.toml`, so bumping that dependency moves this too.
 
 set -euo pipefail
 

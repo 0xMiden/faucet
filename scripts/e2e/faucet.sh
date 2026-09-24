@@ -23,8 +23,7 @@ start() {
 
     mkdir -p "${WORK_DIR}"
     # The faucet reads its API keys on startup, so the file has to exist even with no keys in it.
-    : >"${API_KEYS_FILE}"
-    : >"${LOG_FILE}"
+    touch "${API_KEYS_FILE}"
 
     echo "Starting the faucet on ${FAUCET_URL}, logging to ${LOG_FILE}"
     "${FAUCET_BIN}" start \
@@ -35,8 +34,8 @@ start() {
         --api-bind-port "${FAUCET_URL##*:}" \
         --api-keys-file "${API_KEYS_FILE}" \
         --no-frontend \
-        >>"${LOG_FILE}" 2>&1 &
-    echo $! >"${PID_FILE}"
+        > "${LOG_FILE}" 2>&1 &
+    echo $! > "${PID_FILE}"
 
     for _ in $(seq "${START_TIMEOUT_SECONDS}"); do
         if curl --silent --fail --output /dev/null "${FAUCET_URL}/get_metadata"; then
@@ -58,7 +57,7 @@ stop() {
     pid="$(cat "${PID_FILE}")"
     rm -f "${PID_FILE}"
 
-    kill "${pid}" 2>/dev/null || return 0
+    kill "${pid}" 2> /dev/null || return 0
     echo "Stopped the faucet (pid ${pid})"
 }
 
