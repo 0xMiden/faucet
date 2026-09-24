@@ -26,12 +26,6 @@ use tokio::task;
 
 const DEFAULT_FAUCET_URL: &str = "https://faucet-api.testnet.miden.io";
 const REQUEST_TIMEOUT_MS: u64 = 30_000;
-/// How long to keep looking for the note before giving up.
-///
-/// The funding service answers as soon as it has queued the note, so the note reaches the chain a
-/// few blocks later and the client has to wait for it. Three attempts covered the old behaviour,
-/// where the service only answered once the note was committed, but not this one: a loaded network
-/// takes longer than fifteen seconds to put the note in a block.
 const MAX_SYNC_RETRIES: u32 = 10;
 const SYNC_RETRY_DELAY_SECS: u64 = 5;
 

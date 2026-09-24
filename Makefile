@@ -79,8 +79,7 @@ test:  ## Runs all tests
 	cargo nextest run --release --all-features --workspace
 
 # The end-to-end test starts a real node, funding service and faucet, requests tokens and consumes
-# the resulting note. Each part is a script of its own so CI can run them as separate steps and see
-# which one failed; this target chains them for a developer who just wants to run the whole thing.
+# the resulting note.
 .PHONY: test-e2e
 test-e2e: ## Runs the end-to-end test against a real node and funding service
 	cargo build --release --locked -p miden-faucet -p miden-faucet-client

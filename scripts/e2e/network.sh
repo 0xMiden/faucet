@@ -4,12 +4,6 @@
 #
 # The node repo already has a compose stack for a complete local network, so it is cloned and used
 # as is. The images are the published ones, so nothing is built.
-#
-# The stack publishes the node's RPC on 57291 and the funding service on 50401, the same ports a
-# local network uses, so stop yours before running this.
-#
-# The version comes from the `miden-node-proto-build` pin in `bin/faucet/Cargo.toml`: bumping that
-# dependency moves the whole network with it and nothing here needs editing.
 
 set -euo pipefail
 

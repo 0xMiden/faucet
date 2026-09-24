@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 #
 # Starts and stops the faucet the end-to-end test runs against.
-#
-# The faucet runs in the background so the test is a step of its own, which keeps a failure easy to
-# read: the setup either worked or it did not, and the logs of each part stay separate.
 
 set -euo pipefail
 

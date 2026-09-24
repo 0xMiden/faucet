@@ -1,8 +1,4 @@
 # Runs the faucet against a real node and funding service.
-#
-# Each part of the setup is a step of its own so a failure points at what broke: the build, the
-# images, the network, the faucet, or the request itself. `make test-e2e` chains the same scripts
-# for running the whole thing locally.
 
 name: test-e2e
 
