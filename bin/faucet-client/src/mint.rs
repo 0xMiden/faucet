@@ -3,12 +3,11 @@
 use std::time::Duration;
 
 use clap::Parser;
-use miden_client::Word;
 use miden_client::account::{AccountId, Address};
 use miden_client::address::AddressId;
 use miden_client::note::{NoteId, get_input_note_with_id_prefix};
 use miden_client::store::NoteRecordError;
-use miden_client::transaction::{TransactionId, TransactionRequestBuilder};
+use miden_client::transaction::TransactionRequestBuilder;
 use miden_client_cli::CliClient;
 use miden_faucet_lib::requests::{
     GetPowResponse,
@@ -85,7 +84,7 @@ impl MintCmd {
             .request_tokens(&challenge, nonce, &account_id, self.amount)
             .await?;
 
-        println!("Mint request accepted. Transaction: {}", mint_response.tx_id.to_hex());
+        println!("Mint request accepted.");
         println!("Public P2ID note commitment: {}", mint_response.note_id.to_hex());
 
         if self.no_consume {
@@ -280,13 +279,7 @@ impl FaucetHttpClient {
             MintClientError::InvalidNoteId(parsed.note_id.clone(), err.to_string())
         })?;
 
-        let tx_id_word = Word::try_from(parsed.tx_id.as_str()).map_err(|err| {
-            MintClientError::InvalidTransactionId(parsed.tx_id.clone(), err.to_string())
-        })?;
-        // SAFETY: TransactionId is a newtype wrapper around Word with the same memory layout
-        let tx_id = unsafe { std::mem::transmute::<Word, TransactionId>(tx_id_word) };
-
-        Ok(MintResponse { note_id, tx_id })
+        Ok(MintResponse { note_id })
     }
 }
 
@@ -322,8 +315,6 @@ pub enum MintClientError {
     PowTask(String),
     #[error("invalid note id `{0}`: {1}")]
     InvalidNoteId(String, String),
-    #[error("invalid transaction id `{0}`: {1}")]
-    InvalidTransactionId(String, String),
     #[error("failed to initialize client: {0}")]
     ClientConfig(String),
     #[error("failed to sync client state: {0}")]

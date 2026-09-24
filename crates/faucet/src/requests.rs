@@ -1,6 +1,5 @@
 use miden_protocol::account::AccountId;
 use miden_protocol::note::NoteId;
-use miden_protocol::transaction::TransactionId;
 use serde::{Deserialize, Serialize};
 
 use crate::types::AssetAmount;
@@ -46,7 +45,6 @@ pub struct GetPowResponse {
 /// Response from the `/get_tokens` endpoint.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct GetTokensResponse {
-    pub tx_id: String,
     pub note_id: String,
 }
 
@@ -60,6 +58,5 @@ pub struct MintRequest {
 
 #[derive(Debug, Clone)]
 pub struct MintResponse {
-    pub tx_id: TransactionId,
     pub note_id: NoteId,
 }

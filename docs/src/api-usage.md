@@ -76,7 +76,6 @@ if (!response.ok) throw new Error(`Get tokens error: ${response.status} ${await 
 const text = await response.text();
 const json = JSON.parse(text);
 const noteId = json.note_id;
-const txId = json.tx_id;
 const explorerUrl = json.explorer_url;
 ```
 

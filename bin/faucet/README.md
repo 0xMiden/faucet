@@ -23,7 +23,6 @@ This crate contains a binary CLI that allows to run the faucet behind a REST API
   - `nonce` (number, required): The nonce used to solve the challenge
   - `api_key` (string, optional): API key for authentication
 - **Response**: JSON object containing:
-  - `tx_id` (string): ID of the created transaction
   - `note_id` (string): ID of the created note
 
 See more detail in the [API Documentation](../../docs/src/rest-api.md).

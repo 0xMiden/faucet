@@ -78,6 +78,5 @@ async fn main() {
         .await
         .unwrap();
     println!("Token minted successfully:");
-    println!("* Transaction ID: {}", result["tx_id"]);
     println!("* Note ID: {}", result["note_id"]);
 }

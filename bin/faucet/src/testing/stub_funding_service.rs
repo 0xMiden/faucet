@@ -6,7 +6,6 @@ use miden_protocol::Word;
 use miden_protocol::account::AccountId;
 use miden_protocol::asset::FungibleAsset;
 use miden_protocol::note::{Note, NoteType};
-use miden_protocol::transaction::TransactionId;
 use miden_protocol::utils::serde::Serializable;
 use miden_standards::note::P2idNote;
 use serde::Deserialize;
@@ -54,10 +53,5 @@ async fn request_funds(Json(request): Json<RequestFundsRequest>) -> Json<serde_j
         .build()
         .expect("the P2ID note is well formed")
         .into();
-    let transaction_id = TransactionId::from_raw(Word::from([9u32; 4]));
-
-    Json(serde_json::json!({
-        "note": hex::encode(note.to_bytes()),
-        "transaction_id": hex::encode(transaction_id.to_bytes()),
-    }))
+    Json(serde_json::json!({ "note": hex::encode(note.to_bytes()) }))
 }

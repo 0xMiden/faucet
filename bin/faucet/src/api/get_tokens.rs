@@ -38,7 +38,6 @@ pub async fn get_tokens(
         .map_err(GetTokenError::FundingServiceError)?;
 
     Ok(Json(GetTokensResponse {
-        tx_id: funding_response.transaction_id.to_hex(),
         note_id: funding_response.note.id().to_hex(),
     }))
 }
