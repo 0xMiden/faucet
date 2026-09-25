@@ -10,7 +10,11 @@ use std::time::Duration;
 use miden_client::Client;
 use miden_client::account::component::BasicWallet;
 use miden_client::account::{
-    Account, AccountBuilder, AccountBuilderSchemaCommitmentExt, AccountId, AccountType,
+    Account,
+    AccountBuilder,
+    AccountBuilderSchemaCommitmentExt,
+    AccountId,
+    AccountType,
 };
 use miden_client::auth::{Approver, AuthSchemeId, AuthSecretKey, AuthSingleSig};
 use miden_client::builder::ClientBuilder;
