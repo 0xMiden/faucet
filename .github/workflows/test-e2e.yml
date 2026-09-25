@@ -1,0 +1,66 @@
+# Runs the faucet against a real node and funding service.
+
+name: test-e2e
+
+on:
+  push:
+    branches: [main, next]
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+# Limits workflow concurrency to only the latest commit in the PR.
+concurrency:
+  group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  test-e2e:
+    name: test-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # `scripts/e2e/network.sh` takes the node version from the `miden-node-proto-build` pin, which
+      # is 0.17.0-rc.3. The release run for that tag failed before it built anything, so no images
+      # were published for it and the newest ones are 0.17.0-rc.2. Remove this once the images are
+      # published.
+      NODE_VERSION: 0.17.0-rc.2
+    steps:
+      - uses: actions/checkout@main
+      - name: Rustup
+        run: rustup update --no-self-update
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # `make test` builds the whole workspace in release, which covers everything this job
+          # compiles, so both share one cache instead of each filling its own.
+          shared-key: release
+          # Saving on a pull request too means a second push to the same branch does not recompile.
+          # GitHub scopes a branch's cache to that branch, so this does not disturb other runs.
+          save-if: true
+
+      - name: Build the faucet and the test
+        run: |
+          cargo build --release --locked -p miden-faucet
+          cargo test --release --locked -p miden-faucet-client --test e2e --no-run
+
+      - name: Start the node and the funding service
+        run: scripts/e2e/network.sh up
+
+      - name: Start the faucet
+        run: scripts/e2e/faucet.sh up
+
+      - name: Run the test
+        run: cargo test --release --locked -p miden-faucet-client --test e2e -- --ignored --nocapture
+
+      - name: Faucet logs
+        if: failure()
+        run: cat target/e2e/faucet.log || true
+
+      - name: Network logs
+        if: failure()
+        run: scripts/e2e/network.sh logs
+
+      - name: Stop everything
+        if: always()
+        run: |
+          scripts/e2e/faucet.sh down
+          scripts/e2e/network.sh down
