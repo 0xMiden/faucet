@@ -3368,7 +3368,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet"
-version = "0.17.0-rc.1"
+version = "0.17.0-rc.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3414,7 +3414,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet-client"
-version = "0.17.0-rc.1"
+version = "0.17.0-rc.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -3435,7 +3435,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet-lib"
-version = "0.17.0-rc.1"
+version = "0.17.0-rc.2"
 dependencies = [
  "miden-protocol",
  "serde",
@@ -3608,7 +3608,7 @@ dependencies = [
 
 [[package]]
 name = "miden-pow-rate-limiter"
-version = "0.17.0-rc.1"
+version = "0.17.0-rc.2"
 dependencies = [
  "serde_json",
  "sha2 0.10.9",

@@ -2,7 +2,7 @@
 
 ## 0.17.0-rc.2 (2026-09-24)
 
-- Updated the Miden dependencies: `miden-protocol` / `miden-standards` / `miden-testing` to v0.17.0-rc.7, `miden-client` / `miden-client-cli` / `miden-client-sqlite-store` / `miden-node-proto-build` to v0.17.0-rc.3, and the frontend SDK and wallet adapter to v0.17.0-rc.3.
+- Updated the Miden dependencies: `miden-protocol` / `miden-standards` / `miden-testing` to v0.17.0-rc.7, `miden-client` / `miden-client-cli` / `miden-client-sqlite-store` / `miden-node-proto-build` to v0.17.0-rc.3, and the frontend SDK and wallet adapter to v0.17.0-rc.3. Bumped the workspace version to 0.17.0-rc.2.
 - [BREAKING] Removed `transaction_id` from the expected funding service token request response and the corresponding `tx_id` from the `/get_tokens` response, and updated the frontend accordingly. The frontend no longer shows a "Faucet unavailable" error when requesting tokens ([#316](https://github.com/0xMiden/faucet/pull/316)).
 - Fixed the position of the error element in the frontend, to prevent an error from stretching the page ([#316](https://github.com/0xMiden/faucet/pull/316)).
 - Fixed the `start` command so that it no longer fails if the default API keys file `api_keys.txt` does not exist ([#316](https://github.com/0xMiden/faucet/pull/316)).
