@@ -31,11 +31,10 @@ jobs:
           # GitHub scopes a branch's cache to that branch, so this does not disturb other runs.
           save-if: true
 
-      - name: Build the faucet and its client
-        run: cargo build --release --locked -p miden-faucet -p miden-faucet-client
-
-      - name: Download the Miden client CLI
-        run: scripts/e2e/install-miden-client.sh
+      - name: Build the faucet and the test
+        run: |
+          cargo build --release --locked -p miden-faucet
+          cargo test --release --locked -p miden-faucet-client --test e2e --no-run
 
       - name: Start the node and the funding service
         run: scripts/e2e/network.sh up
@@ -43,8 +42,8 @@ jobs:
       - name: Start the faucet
         run: scripts/e2e/faucet.sh up
 
-      - name: Request tokens
-        run: scripts/e2e/request-tokens.sh
+      - name: Run the test
+        run: cargo test --release --locked -p miden-faucet-client --test e2e -- --ignored --nocapture
 
       - name: Faucet logs
         if: failure()
