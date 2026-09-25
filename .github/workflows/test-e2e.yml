@@ -18,6 +18,12 @@ jobs:
     name: test-e2e
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # `scripts/e2e/network.sh` takes the node version from the `miden-node-proto-build` pin, which
+      # is 0.17.0-rc.3. The release run for that tag failed before it built anything, so no images
+      # were published for it and the newest ones are 0.17.0-rc.2. Remove this once the images are
+      # published.
+      NODE_VERSION: 0.17.0-rc.2
     steps:
       - uses: actions/checkout@main
       - name: Rustup
