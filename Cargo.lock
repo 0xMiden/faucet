@@ -3154,7 +3154,8 @@ dependencies = [
 [[package]]
 name = "miden-client"
 version = "0.17.0-rc.3"
-source = "git+https://github.com/0xMiden/rust-sdk?branch=jmunoz-protocol-0.17.0-rc.7#1fc7d1fef1f5ea675ef9b1e8f20703a9631c2f6c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67c741df90b8200724754c1fb5f9c5637e1b09c01666be3d71ac5671660bd50d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3193,7 +3194,8 @@ dependencies = [
 [[package]]
 name = "miden-client-cli"
 version = "0.17.0-rc.3"
-source = "git+https://github.com/0xMiden/rust-sdk?branch=jmunoz-protocol-0.17.0-rc.7#1fc7d1fef1f5ea675ef9b1e8f20703a9631c2f6c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd5d4f935ae632bfd8619ba2ef5fe320a6ff1cae049fd348ae5a9472139d320e"
 dependencies = [
  "clap",
  "comfy-table",
@@ -3214,7 +3216,8 @@ dependencies = [
 [[package]]
 name = "miden-client-sqlite-store"
 version = "0.17.0-rc.3"
-source = "git+https://github.com/0xMiden/rust-sdk?branch=jmunoz-protocol-0.17.0-rc.7#1fc7d1fef1f5ea675ef9b1e8f20703a9631c2f6c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26e6080367e8a4ae5c76d8492f122119f6fa6c1c9029881374e6a65bbb2b7994"
 dependencies = [
  "anyhow",
  "async-trait",
