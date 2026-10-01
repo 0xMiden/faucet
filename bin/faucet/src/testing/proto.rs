@@ -24,9 +24,14 @@ pub mod primitives {
 pub mod protocol_config {
     include!(concat!(env!("OUT_DIR"), "/protocol_config.rs"));
 }
-pub mod rpc {
-    include!(concat!(env!("OUT_DIR"), "/rpc.rs"));
+pub mod miden {
+    pub mod node {
+        pub mod v1 {
+            include!(concat!(env!("OUT_DIR"), "/miden.node.v1.rs"));
+        }
+    }
 }
+pub use miden::node::v1 as rpc;
 pub mod submission {
     include!(concat!(env!("OUT_DIR"), "/submission.rs"));
 }
