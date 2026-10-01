@@ -2,7 +2,7 @@
 
 ## 0.17.0-rc.2 (2026-10-01)
 
-- Updated the Miden dependencies: `miden-protocol` / `miden-standards` / `miden-testing` to v0.17.0-rc.6, `miden-client` / `miden-client-cli` / `miden-client-sqlite-store` / `miden-node-proto-build` to v0.17.0-rc.2, and the frontend SDK and wallet adapter to v0.17.0-rc.2. Bumped the workspace version to 0.17.0-rc.1 ([#319](https://github.com/0xMiden/faucet/pull/319)).
+- Updated the Miden dependencies: `miden-protocol` / `miden-standards` / `miden-testing` to v0.17.0-rc.9, `miden-client` / `miden-client-cli` / `miden-client-sqlite-store` to v0.17.0-rc.5, `miden-node-proto-build` to v0.17.0-rc.4, and the frontend SDK and wallet adapter to v0.17.0-rc.5. Bumped the workspace version to 0.17.0-rc.3 ([#319](https://github.com/0xMiden/faucet/pull/319)).
 
 ## 0.17.0-rc.2 (2026-09-24)
 
