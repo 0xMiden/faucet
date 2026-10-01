@@ -489,12 +489,13 @@ mod tests {
     use miden_protocol::address::{Address, NetworkId};
     use miden_protocol::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
     use rand::SeedableRng;
-    use serde_json::{Map, json};
+    use serde_json::{Map, Value, json};
     use tokio::io::AsyncBufReadExt;
     use tokio::net::TcpListener;
     use url::Url;
     use uuid::Uuid;
 
+    use crate::api_key::ApiKey;
     use crate::funding_service_client::FundingServiceClient;
     use crate::network::FaucetNetwork;
     use crate::testing::stub_funding_service::{STUB_MAX_AMOUNT, serve_stub_funding_service};
@@ -645,7 +646,7 @@ mod tests {
 
         // Verify the key was removed.
         let keys = crate::load_api_keys_from_file(&file_path).await.unwrap();
-        assert!(keys.is_empty());
+        assert_eq!(keys, [] as [ApiKey; 0]);
     }
 
     // INTEGRATION TEST
@@ -728,7 +729,7 @@ mod tests {
         let failed_requests = client.execute(script, vec![]).await.unwrap();
 
         // Verify all requests are successful
-        assert!(failed_requests.as_array().unwrap().is_empty());
+        assert_eq!(failed_requests.as_array().unwrap().as_slice(), [] as [Value; 0]);
 
         client.close().await.unwrap();
     }

@@ -9,7 +9,7 @@ use tonic::{Request, Response, Status};
 use tonic_web::GrpcWebLayer;
 
 use super::proto;
-use super::proto::rpc::api_server;
+use super::proto::rpc::node_service_server;
 use super::proto::to_proto_block_header;
 
 /// Chain state served by the stub.
@@ -35,12 +35,12 @@ pub struct StubRpcApi {
 }
 
 #[tonic::async_trait]
-impl api_server::Api for StubRpcApi {
+impl node_service_server::NodeService for StubRpcApi {
     async fn get_block_header_by_number(
         &self,
-        _request: Request<proto::rpc::BlockHeaderByNumberRequest>,
-    ) -> Result<Response<proto::rpc::BlockHeaderByNumberResponse>, Status> {
-        Ok(Response::new(proto::rpc::BlockHeaderByNumberResponse {
+        _request: Request<proto::rpc::GetBlockHeaderByNumberRequest>,
+    ) -> Result<Response<proto::rpc::GetBlockHeaderByNumberResponse>, Status> {
+        Ok(Response::new(proto::rpc::GetBlockHeaderByNumberResponse {
             block_header: Some(to_proto_block_header(&self.chain.genesis)),
             mmr_path: None,
             chain_length: None,
@@ -50,8 +50,8 @@ impl api_server::Api for StubRpcApi {
 
     async fn get_transaction_encryption_key(
         &self,
-        _request: Request<()>,
-    ) -> Result<Response<proto::submission::TransactionEncryptionKey>, Status> {
+        _request: Request<proto::rpc::GetTransactionEncryptionKeyRequest>,
+    ) -> Result<Response<proto::rpc::GetTransactionEncryptionKeyResponse>, Status> {
         unimplemented!()
     }
 
@@ -67,22 +67,22 @@ impl api_server::Api for StubRpcApi {
 
     async fn get_notes_by_id(
         &self,
-        _request: Request<proto::rpc::NotesByIdRequest>,
-    ) -> Result<Response<proto::rpc::NotesByIdResponse>, Status> {
+        _request: Request<proto::rpc::GetNotesByIdRequest>,
+    ) -> Result<Response<proto::rpc::GetNotesByIdResponse>, Status> {
         unimplemented!()
     }
 
     async fn submit_proven_tx(
         &self,
-        _request: Request<proto::submission::ProvenTransactionSubmission>,
-    ) -> Result<Response<proto::blockchain::BlockNumber>, Status> {
-        Ok(Response::new(proto::blockchain::BlockNumber { block_num: 0 }))
+        _request: Request<proto::rpc::SubmitProvenTxRequest>,
+    ) -> Result<Response<proto::rpc::SubmitProvenTxResponse>, Status> {
+        Ok(Response::new(proto::rpc::SubmitProvenTxResponse { block_num: 0 }))
     }
 
     async fn submit_proven_tx_batch(
         &self,
-        _request: Request<proto::submission::TransactionBatch>,
-    ) -> Result<Response<proto::blockchain::BlockNumber>, Status> {
+        _request: Request<proto::rpc::SubmitProvenTxBatchRequest>,
+    ) -> Result<Response<proto::rpc::SubmitProvenTxBatchResponse>, Status> {
         unimplemented!()
     }
 
@@ -116,15 +116,15 @@ impl api_server::Api for StubRpcApi {
 
     async fn get_account(
         &self,
-        _request: Request<proto::rpc::AccountRequest>,
-    ) -> Result<Response<proto::rpc::AccountResponse>, Status> {
+        _request: Request<proto::rpc::GetAccountRequest>,
+    ) -> Result<Response<proto::rpc::GetAccountResponse>, Status> {
         Err(Status::not_found("account not found"))
     }
 
     async fn register_account(
         &self,
         _request: Request<proto::rpc::RegisterAccountRequest>,
-    ) -> Result<Response<()>, Status> {
+    ) -> Result<Response<proto::rpc::RegisterAccountResponse>, Status> {
         unimplemented!()
     }
 
@@ -137,15 +137,15 @@ impl api_server::Api for StubRpcApi {
 
     async fn get_block_by_number(
         &self,
-        _request: Request<proto::rpc::BlockRequest>,
-    ) -> Result<Response<proto::rpc::MaybeBlock>, Status> {
+        _request: Request<proto::rpc::GetBlockByNumberRequest>,
+    ) -> Result<Response<proto::rpc::GetBlockByNumberResponse>, Status> {
         unimplemented!()
     }
 
     async fn status(
         &self,
-        _request: Request<()>,
-    ) -> Result<Response<proto::rpc::RpcStatus>, Status> {
+        _request: Request<proto::rpc::StatusRequest>,
+    ) -> Result<Response<proto::rpc::StatusResponse>, Status> {
         unimplemented!()
     }
 
@@ -165,8 +165,8 @@ impl api_server::Api for StubRpcApi {
 
     async fn get_note_script_by_root(
         &self,
-        _request: Request<proto::rpc::NoteScriptByRootRequest>,
-    ) -> Result<Response<proto::rpc::MaybeNoteScript>, Status> {
+        _request: Request<proto::rpc::GetNoteScriptByRootRequest>,
+    ) -> Result<Response<proto::rpc::GetNoteScriptByRootResponse>, Status> {
         unimplemented!()
     }
 
@@ -189,8 +189,8 @@ impl api_server::Api for StubRpcApi {
 
     async fn get_limits(
         &self,
-        _request: Request<()>,
-    ) -> Result<Response<proto::rpc::RpcLimits>, Status> {
+        _request: Request<proto::rpc::GetLimitsRequest>,
+    ) -> Result<Response<proto::rpc::GetLimitsResponse>, Status> {
         use std::collections::HashMap;
 
         let make_endpoint = |params: Vec<(&str, u32)>| proto::rpc::EndpointLimits {
@@ -205,7 +205,7 @@ impl api_server::Api for StubRpcApi {
             ("SyncNotes".to_string(), make_endpoint(vec![("note_tag", 1000)])),
         ]);
 
-        Ok(Response::new(proto::rpc::RpcLimits { endpoints }))
+        Ok(Response::new(proto::rpc::GetLimitsResponse { endpoints }))
     }
 
     async fn sync_chain_mmr(
@@ -223,7 +223,7 @@ impl api_server::Api for StubRpcApi {
 
     async fn get_network_note_status(
         &self,
-        _request: Request<proto::note::NoteId>,
+        _request: Request<proto::rpc::GetNetworkNoteStatusRequest>,
     ) -> Result<Response<proto::rpc::GetNetworkNoteStatusResponse>, Status> {
         unimplemented!()
     }
@@ -234,7 +234,9 @@ impl api_server::Api for StubRpcApi {
 /// The listener is bound by the caller so the port is accepting connections before the caller
 /// hands out its URL; binding it here instead would leave a window where clients are refused.
 pub async fn serve_stub(listener: TcpListener) -> anyhow::Result<()> {
-    let api_service = api_server::ApiServer::new(StubRpcApi { chain: Arc::new(StubChain::new()) });
+    let api_service = node_service_server::NodeServiceServer::new(StubRpcApi {
+        chain: Arc::new(StubChain::new()),
+    });
 
     tonic::transport::Server::builder()
         .accept_http1(true)
