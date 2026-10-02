@@ -2,7 +2,7 @@
 
 .PHONY: help
 help:
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
 # -- variables ------------------------------------------------------------------------------------
 
@@ -77,6 +77,19 @@ book: ## Builds the book & serves documentation site
 .PHONY: test
 test:  ## Runs all tests
 	cargo nextest run --release --all-features --workspace
+
+# The end-to-end test starts a real node, funding service and faucet, requests tokens and consumes
+# the resulting note.
+.PHONY: test-e2e
+test-e2e: ## Runs the end-to-end test against a real node and funding service
+	cargo build --release --locked -p miden-faucet
+	scripts/e2e/network.sh up
+	scripts/e2e/faucet.sh up
+	cargo test --release --locked -p miden-faucet-client --test e2e -- --ignored --nocapture; \
+	    status=$$?; \
+	    scripts/e2e/faucet.sh down; \
+	    scripts/e2e/network.sh down; \
+	    exit $$status
 
 # --- checking ------------------------------------------------------------------------------------
 

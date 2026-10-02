@@ -26,7 +26,7 @@ use tokio::task;
 
 const DEFAULT_FAUCET_URL: &str = "https://faucet-api.testnet.miden.io";
 const REQUEST_TIMEOUT_MS: u64 = 30_000;
-const MAX_SYNC_RETRIES: u32 = 3;
+const MAX_SYNC_RETRIES: u32 = 10;
 const SYNC_RETRY_DELAY_SECS: u64 = 5;
 
 // CLI
@@ -166,7 +166,7 @@ impl MintCmd {
 
 /// HTTP client for interacting with the faucet API.
 #[derive(Clone)]
-struct FaucetHttpClient {
+pub struct FaucetHttpClient {
     http_client: HttpClient,
     base_url: Url,
     api_key: Option<String>,
@@ -174,7 +174,7 @@ struct FaucetHttpClient {
 
 impl FaucetHttpClient {
     /// Creates a new `FaucetHttpClient` instance.
-    fn new(
+    pub fn new(
         endpoint: &str,
         timeout_ms: u64,
         api_key: Option<String>,
@@ -191,7 +191,7 @@ impl FaucetHttpClient {
     }
 
     /// Requests a `PoW` challenge from the faucet API.
-    async fn request_pow(
+    pub async fn request_pow(
         &self,
         account_id: &AccountId,
         amount: u64,
@@ -231,7 +231,7 @@ impl FaucetHttpClient {
     }
 
     /// Requests tokens from the faucet API.
-    async fn request_tokens(
+    pub async fn request_tokens(
         &self,
         challenge: &str,
         nonce: u64,
@@ -349,7 +349,7 @@ fn parse_account_id(input: &str) -> Result<AccountId, MintClientError> {
 /// Solves the `PoW` challenge and returns the nonce that satisfies the target.
 ///
 /// Heavy work runs on a blocking thread so we don't stall the async runtime.
-async fn solve_challenge(challenge_hex: &str, target: u64) -> Result<u64, MintClientError> {
+pub async fn solve_challenge(challenge_hex: &str, target: u64) -> Result<u64, MintClientError> {
     if target == 0 {
         return Err(MintClientError::ZeroTarget);
     }
