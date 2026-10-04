@@ -1,21 +1,16 @@
 use std::collections::HashSet;
-use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 use axum::Router;
 use axum::extract::FromRef;
-use axum::routing::{get, post};
+use axum::routing::get;
 use http::HeaderValue;
-use miden_client::account::{AccountId, AccountIdError, AddressError};
-use miden_client::note_transport::grpc::GrpcNoteTransportClient;
-use miden_client::utils::hex_to_bytes;
-use miden_faucet_lib::P2idNoteCache;
-use miden_faucet_lib::requests::MintRequestSender;
 use miden_faucet_lib::types::AssetAmount;
 use miden_pow_rate_limiter::{Challenge, ChallengeError, PoWRateLimiter, PoWRateLimiterConfig};
+use miden_protocol::account::AccountId;
+use miden_protocol::errors::{AccountIdError, AddressError};
 use tokio::net::TcpListener;
-use tokio::sync::watch;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -23,20 +18,15 @@ use tracing::instrument;
 use url::Url;
 
 use crate::COMPONENT;
-use crate::api::events::issuance_stream;
 use crate::api::get_metadata::get_metadata;
-use crate::api::get_note::get_note;
 use crate::api::get_pow::get_pow;
-use crate::api::get_tokens::{GetTokensState, MintRequestError, get_tokens};
-use crate::api::send_note::send_note;
+use crate::api::get_tokens::{MintRequestError, get_tokens};
 use crate::api_key::ApiKey;
+use crate::funding_service_client::FundingServiceClient;
 
-mod events;
 mod get_metadata;
-mod get_note;
 mod get_pow;
 mod get_tokens;
-mod send_note;
 
 pub use get_metadata::Metadata;
 
@@ -46,40 +36,30 @@ pub use get_metadata::Metadata;
 /// Serves the faucet's API server that handles token requests.
 #[derive(Clone)]
 pub struct ApiServer {
-    mint_state: GetTokensState,
+    funding_service: FundingServiceClient,
+    max_claimable_amount: AssetAmount,
     metadata: Metadata,
-    issuance_receiver: watch::Receiver<AssetAmount>,
     rate_limiter: PoWRateLimiter,
     api_keys: HashSet<ApiKey>,
-    note_transport_client: Option<Arc<GrpcNoteTransportClient>>,
-    p2id_notes: P2idNoteCache,
 }
 
 impl ApiServer {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         metadata: Metadata,
         max_claimable_amount: AssetAmount,
-        mint_request_sender: MintRequestSender,
+        funding_service: FundingServiceClient,
         pow_secret: [u8; 32],
         rate_limiter_config: PoWRateLimiterConfig,
         api_keys: &[ApiKey],
-        note_transport_client: Option<Arc<GrpcNoteTransportClient>>,
-        issuance_receiver: watch::Receiver<AssetAmount>,
-        p2id_notes: P2idNoteCache,
     ) -> Self {
-        let mint_state = GetTokensState::new(mint_request_sender, max_claimable_amount);
-
         let rate_limiter = PoWRateLimiter::new_with_cleanup(pow_secret, rate_limiter_config);
 
         ApiServer {
-            mint_state,
+            funding_service,
+            max_claimable_amount,
             metadata,
-            issuance_receiver,
             rate_limiter,
             api_keys: api_keys.iter().cloned().collect::<HashSet<_>>(),
-            note_transport_client,
-            p2id_notes,
         }
     }
 
@@ -87,11 +67,8 @@ impl ApiServer {
     pub async fn serve(self, url: Url) -> anyhow::Result<()> {
         let app = Router::new()
             .route("/get_metadata", get(get_metadata))
-            .route("/issuance", get(issuance_stream))
             .route("/pow", get(get_pow))
             .route("/get_tokens", get(get_tokens))
-            .route("/get_note", get(get_note))
-            .route("/send_note", post(send_note))
             .layer(
                 ServiceBuilder::new()
                     .layer(SetResponseHeaderLayer::if_not_present(
@@ -148,9 +125,10 @@ impl ApiServer {
         let mut requestor = [0u8; 32];
         requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
 
-        let challenge = hex_to_bytes::<{ Challenge::SERIALIZED_SIZE }>(&format!("0x{challenge}"))
-            .map_err(|_| MintRequestError::PowError(ChallengeError::InvalidSerialization))?
-            .into();
+        let mut challenge_bytes = [0u8; Challenge::SERIALIZED_SIZE];
+        hex::decode_to_slice(challenge, &mut challenge_bytes)
+            .map_err(|_| MintRequestError::PowError(ChallengeError::InvalidSerialization))?;
+        let challenge = challenge_bytes.into();
         self.rate_limiter
             .submit_challenge(requestor, api_key, &challenge, nonce, timestamp, request_complexity)
             .map_err(MintRequestError::PowError)
@@ -165,12 +143,6 @@ impl ApiServer {
 impl FromRef<ApiServer> for Metadata {
     fn from_ref(input: &ApiServer) -> Self {
         input.metadata.clone()
-    }
-}
-
-impl FromRef<ApiServer> for GetTokensState {
-    fn from_ref(input: &ApiServer) -> Self {
-        input.mint_state.clone()
     }
 }
 

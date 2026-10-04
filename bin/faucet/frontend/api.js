@@ -37,10 +37,9 @@ export async function getPowChallenge(backendUrl, recipient, amount) {
     return response.json();
 }
 
-export async function getTokens(backendUrl, challenge, nonce, recipient, amount, isPrivateNote) {
+export async function getTokens(backendUrl, challenge, nonce, recipient, amount) {
     const params = {
         account_id: recipient,
-        is_private_note: isPrivateNote,
         asset_amount: parseInt(amount),
         challenge: challenge,
         nonce: nonce
@@ -54,36 +53,4 @@ export async function getTokens(backendUrl, challenge, nonce, recipient, amount,
     }
 
     return response.json();
-}
-
-export async function get_note(backendUrl, noteId) {
-    const response = await fetch(backendUrl + '/get_note?' + new URLSearchParams({
-        note_id: noteId
-    }));
-    if (!response.ok) {
-        const message = await response.text();
-        throw new ApiError(message, response.status);
-    }
-    const json = await response.json();
-
-    // Decode base64
-    const binaryString = atob(json.data_base64);
-    const byteArray = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-        byteArray[i] = binaryString.charCodeAt(i);
-    }
-
-    return byteArray;
-}
-
-export async function send_note(backendUrl, noteId) {
-    const response = await fetch(backendUrl + '/send_note?' + new URLSearchParams({
-        note_id: noteId
-    }), {
-        method: 'POST'
-    });
-    if (!response.ok) {
-        const message = await response.text();
-        throw new ApiError(message, response.status);
-    }
 }

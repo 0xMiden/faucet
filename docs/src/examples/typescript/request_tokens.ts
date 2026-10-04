@@ -1,6 +1,5 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { hexToBytes } from '@noble/hashes/utils.js';
-import fs from 'fs';
 
 async function sendPowRequest(baseUrl: string, accountId: string): Promise<{ challenge: string, target: bigint }> {
     const powUrl = new URL('/pow', baseUrl);
@@ -47,10 +46,9 @@ async function solveChallenge(challenge: string, target: bigint): Promise<number
 }
 
 
-async function getTokens(baseUrl: string, account_id: string, nonce: number, challenge: string): Promise<{ noteId: string, txId: string }> {
+async function getTokens(baseUrl: string, account_id: string, nonce: number, challenge: string): Promise<{ noteId: string }> {
     const params = new URLSearchParams({
         account_id: account_id,
-        is_private_note: 'true',
         asset_amount: '100',
         challenge: challenge,
         nonce: nonce.toString()
@@ -62,22 +60,7 @@ async function getTokens(baseUrl: string, account_id: string, nonce: number, cha
     const text = await response.text();
     const json = JSON.parse(text);
     const noteId = json.note_id;
-    const txId = json.tx_id;
-    return { noteId, txId };
-}
-
-async function downloadNote(baseUrl: string, noteId: string): Promise<void> {
-    const url = `${baseUrl}/get_note?note_id=${noteId}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Get note error: ${response.status} ${await response.text()}`);
-
-    const text = await response.text();
-    const json = JSON.parse(text);
-
-    // Decode note with base64
-    const noteData = Buffer.from(json.data_base64, 'base64');
-
-    fs.writeFileSync('note.mno', noteData);
+    return { noteId };
 }
 
 async function main(): Promise<void> {
@@ -86,10 +69,8 @@ async function main(): Promise<void> {
 
     let { challenge, target } = await sendPowRequest(baseUrl, accountId);
     let nonce = await solveChallenge(challenge, target);
-    let { noteId, txId } = await getTokens(baseUrl, accountId, nonce, challenge);
+    let { noteId } = await getTokens(baseUrl, accountId, nonce, challenge);
     console.log('Note ID:', noteId);
-    console.log('Tx ID:', txId);
-    await downloadNote(baseUrl, noteId);
 }
 
 main();

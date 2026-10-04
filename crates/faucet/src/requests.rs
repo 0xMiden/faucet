@@ -1,13 +1,8 @@
-use miden_client::account::AccountId;
-use miden_client::note::NoteId;
-use miden_client::transaction::TransactionId;
+use miden_protocol::account::AccountId;
+use miden_protocol::note::NoteId;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{mpsc, oneshot};
 
-use crate::types::{AssetAmount, NoteType};
-
-pub type MintResponseSender = oneshot::Sender<Result<MintResponse, MintError>>;
-pub type MintRequestSender = mpsc::Sender<(MintRequest, MintResponseSender)>;
+use crate::types::AssetAmount;
 
 // QUERY PARAMETERS
 // ================================================================================================
@@ -30,7 +25,6 @@ pub struct PowQueryParams {
 pub struct GetTokensQueryParams {
     pub account_id: String,
     pub asset_amount: u64,
-    pub is_private_note: bool,
     pub challenge: String,
     pub nonce: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -51,7 +45,6 @@ pub struct GetPowResponse {
 /// Response from the `/get_tokens` endpoint.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct GetTokensResponse {
-    pub tx_id: String,
     pub note_id: String,
 }
 
@@ -59,20 +52,11 @@ pub struct GetTokensResponse {
 pub struct MintRequest {
     /// Destination account.
     pub account_id: AccountId,
-    /// Whether to generate a public or private note to hold the minted asset.
-    pub note_type: NoteType,
     /// The amount to mint.
     pub asset_amount: AssetAmount,
 }
 
 #[derive(Debug, Clone)]
 pub struct MintResponse {
-    pub tx_id: TransactionId,
     pub note_id: NoteId,
-}
-
-#[derive(Debug, Clone, thiserror::Error)]
-pub enum MintError {
-    #[error("faucet supply exceeded")]
-    AvailableSupplyExceeded,
 }

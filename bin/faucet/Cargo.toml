@@ -19,8 +19,7 @@ miden-faucet-lib       = { workspace = true }
 miden-pow-rate-limiter = { features = ["tokio"], workspace = true }
 
 # Miden dependencies.
-miden-client              = { features = ["tonic"], workspace = true }
-miden-client-sqlite-store = { workspace = true }
+miden-protocol = { workspace = true }
 
 # External dependencies.
 anyhow                = { workspace = true }
@@ -29,12 +28,14 @@ axum                  = { features = ["tokio"], version = "0.8" }
 axum-extra            = { version = "0.12" }
 base64                = { version = "0.22" }
 clap                  = { features = ["derive", "env", "string"], version = "4.5" }
+hex                   = { workspace = true }
 http                  = { workspace = true }
 humantime             = { workspace = true }
 opentelemetry         = { workspace = true }
 opentelemetry-otlp    = { workspace = true }
 opentelemetry_sdk     = { workspace = true }
 rand                  = { features = ["chacha", "thread_rng"], workspace = true }
+reqwest               = { features = ["json", "query", "rustls"], workspace = true }
 serde                 = { workspace = true }
 serde_json            = { workspace = true }
 sha2                  = { workspace = true }
@@ -50,22 +51,22 @@ tracing-subscriber    = { workspace = true }
 url                   = { workspace = true }
 
 [dev-dependencies]
-fantoccini    = { version = "0.22" }
-miden-client  = { features = ["testing"], workspace = true }
-miden-testing = { default-features = false, version = "0.16.1" }
-prost         = { version = "0.14" }
-reqwest       = { features = ["json"], workspace = true }
-serde_json    = { workspace = true }
-tokio         = { features = ["macros", "process"], workspace = true }
-tonic-prost   = { version = "0.14" }
-tonic-web     = { version = "0.14" }
-uuid          = { workspace = true }
+fantoccini      = { version = "0.22" }
+miden-protocol  = { features = ["testing"], workspace = true }
+miden-standards = { workspace = true }
+miden-testing   = { default-features = false, version = "0.17" }
+prost           = { version = "0.14" }
+serde_json      = { workspace = true }
+tokio           = { features = ["macros", "process"], workspace = true }
+tonic-prost     = { version = "0.14" }
+tonic-web       = { version = "0.14" }
+uuid            = { workspace = true }
 
 # Used to generate the node RPC types for the stub node used in tests
 # (so the dependency only lies in the protobuf interface).
 [build-dependencies]
 brotli                 = { version = "8" }
-miden-node-proto-build = { version = "=0.16.0" }
+miden-node-proto-build = { version = "0.17" }
 tonic-prost-build      = { version = "0.14" }
 
 # Required to avoid false positives in cargo-machete

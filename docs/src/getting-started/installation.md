@@ -56,7 +56,7 @@ cargo install --locked --git https://github.com/0xMiden/faucet miden-faucet-clie
 cargo install --locked --git https://github.com/0xMiden/faucet miden-faucet --rev <git-sha>
 cargo install --locked --git https://github.com/0xMiden/faucet miden-faucet-client --rev <git-sha>
 
-> Use `miden-faucet` to initialize/start the faucet service, and `miden-faucet-client` to mint from a running faucet.
+> Use `miden-faucet` to start the faucet service, and `miden-faucet-client` to request tokens from a running faucet.
 ```
 
 More information on the various `cargo install` options can be found
@@ -66,17 +66,3 @@ More information on the various `cargo install` options can be found
 
 Updating the faucet to a new version is as simply as re-running the install process.
 
-If the node version is updated, you may encounter an error like this:
-```bash
-Error: faucet failed
-
-Caused by:
-    0: transaction executor error
-    1: failed to execute transaction kernel program:
-         × advice provider error at clock cycle 152
-         ╰─▶   × value for key 0x85dee386c7e023b13a5cf16def1c421c57f76c9135a665bdd5b547d6a54d1b15 not present in the advice map
-```
-
-This is a common error that occurs when the Miden network undergoes updates during its active development phase. The error happens because the local client store contains data that's incompatible with the updated node version.
-
-To resolve this issue, delete the `faucet_client_store.sqlite3` file and restart the faucet. This will force the client to re-sync with the updated network state.

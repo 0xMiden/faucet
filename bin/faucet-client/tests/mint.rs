@@ -29,7 +29,6 @@ struct RecordedRequest {
 struct AppState {
     pow_response: GetPowResponse,
     note_id_hex: String,
-    tx_id: String,
     recorded: Arc<Mutex<RecordedRequest>>,
     challenge_hex: String,
 }
@@ -57,12 +56,9 @@ async fn mint_command_requests_public_note() {
     };
     let note_id_hex = format!("0x{}", "00".repeat(32));
     let _note_id = NoteId::try_from_hex(&note_id_hex).expect("hex string should produce a note id");
-    // TransactionId requires a valid 32-byte Word (64 hex chars)
-    let tx_id_hex = format!("0x{}", "ab".repeat(32));
     let app_state = AppState {
         pow_response,
         note_id_hex,
-        tx_id: tx_id_hex,
         recorded: Arc::new(Mutex::new(RecordedRequest::default())),
         challenge_hex,
     };
@@ -104,7 +100,6 @@ async fn mint_command_requests_public_note() {
     let tokens_params = recorded.tokens_params.expect("tokens_params should be recorded");
     assert_eq!(tokens_params.account_id, account_id.to_hex());
     assert_eq!(tokens_params.asset_amount, expected_amount);
-    assert!(!tokens_params.is_private_note);
     assert_eq!(tokens_params.api_key.as_deref(), Some("test-key"));
     assert_eq!(tokens_params.challenge, app_state.challenge_hex);
 }
@@ -128,8 +123,5 @@ async fn tokens_handler(
         let mut recorded = state.recorded.lock().await;
         recorded.tokens_params = Some(params);
     }
-    Json(GetTokensResponse {
-        note_id: state.note_id_hex.clone(),
-        tx_id: state.tx_id.clone(),
-    })
+    Json(GetTokensResponse { note_id: state.note_id_hex.clone() })
 }

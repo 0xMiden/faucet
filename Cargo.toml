@@ -12,26 +12,26 @@ license      = "MIT"
 readme       = "README.md"
 repository   = "https://github.com/0xMiden/faucet"
 rust-version = "1.98.1"
-version      = "0.16.0"
+version      = "0.17.0"
 
 # Optimize the cryptography for faster tests involving account creation.
 [profile.test.package.miden-crypto]
 opt-level = 2
 
 [workspace.dependencies]
-miden-faucet-lib       = { path = "crates/faucet", version = "0.16" }
-miden-pow-rate-limiter = { path = "crates/pow", version = "0.16" }
+miden-faucet-lib       = { path = "crates/faucet", version = "0.17" }
+miden-pow-rate-limiter = { path = "crates/pow", version = "0.17" }
 
 # Miden dependencies.
-miden-client              = { version = "0.16" }
-miden-client-cli          = { version = "0.16" }
-miden-client-sqlite-store = { version = "0.16" }
-# TODO: drop once miden-client re-exports `NetworkNotePricer`, the only thing this is pulled in for.
-# Pinned to the version miden-client resolves to.
-miden-tx = { default-features = false, version = "0.16" }
+miden-client              = { version = "0.17" }
+miden-client-cli          = { version = "0.17" }
+miden-client-sqlite-store = { version = "0.17" }
+miden-protocol            = { version = "0.17" }
+miden-standards           = { version = "0.17" }
 
 # External dependencies
 anyhow                = { version = "1.0" }
+hex                   = { version = "0.4" }
 http                  = { version = "1.4" }
 humantime             = { version = "2.2" }
 opentelemetry         = { version = "0.31" }
