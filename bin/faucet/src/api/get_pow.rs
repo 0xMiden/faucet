@@ -3,6 +3,7 @@ use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use http::StatusCode;
 use miden_faucet_lib::requests::{GetPowResponse, PowQueryParams};
+use miden_faucet_lib::types::AssetAmount;
 use miden_protocol::account::AccountId;
 use miden_protocol::address::{Address, AddressId};
 use miden_protocol::utils::ToHex;
@@ -11,6 +12,7 @@ use tracing::{info_span, instrument};
 use crate::COMPONENT;
 use crate::api::{AccountError, ApiServer};
 use crate::api_key::ApiKey;
+use crate::funding_service_client::FundingServiceError;
 
 // ENDPOINT
 // ================================================================================================
@@ -24,6 +26,22 @@ pub async fn get_pow(
     Query(params): Query<PowQueryParams>,
 ) -> Result<Json<GetPowResponse>, PowRequestError> {
     let request = validate_pow_params(params)?;
+    // Check the requested amount is below the maximum claimable
+    if request.amount > server.max_claimable_amount.base_units() {
+        return Err(PowRequestError::AssetAmountTooBig(
+            request.amount,
+            server.max_claimable_amount,
+        ));
+    }
+
+    // Check the funding service has enough balance to fill the requested amount
+    if let Ok(status) = server.funding_service.status().await
+        && request.amount > status.balance
+    {
+        return Err(PowRequestError::FundingServiceError(FundingServiceError::InsufficientFunds(
+            format!("balance {} is below the requested {}", status.balance, request.amount),
+        )));
+    }
     let account_id_bytes: [u8; AccountId::SERIALIZED_SIZE] = request.account_id.into();
     let mut requestor = [0u8; 32];
     requestor[..AccountId::SERIALIZED_SIZE].copy_from_slice(&account_id_bytes);
@@ -92,6 +110,10 @@ pub enum PowRequestError {
     AccountError(#[from] AccountError),
     #[error("API key {0} failed to parse")]
     InvalidApiKey(String),
+    #[error("requested amount {0} exceeds the maximum claimable amount of {1}")]
+    AssetAmountTooBig(u64, AssetAmount),
+    #[error(transparent)]
+    FundingServiceError(FundingServiceError),
 }
 
 impl PowRequestError {
@@ -100,12 +122,21 @@ impl PowRequestError {
         match self {
             Self::AccountError(_) => "Please enter a valid recipient address".to_owned(),
             Self::InvalidApiKey(_) => "Invalid API key".to_owned(),
+            Self::AssetAmountTooBig(..) => self.to_string(),
+            Self::FundingServiceError(error) => error.user_facing_error(),
+        }
+    }
+
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::FundingServiceError(error) => error.status_code(),
+            _ => StatusCode::BAD_REQUEST,
         }
     }
 }
 
 impl IntoResponse for PowRequestError {
     fn into_response(self) -> axum::response::Response {
-        (StatusCode::BAD_REQUEST, self.user_facing_error()).into_response()
+        (self.status_code(), self.user_facing_error()).into_response()
     }
 }

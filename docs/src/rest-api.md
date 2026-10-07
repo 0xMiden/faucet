@@ -30,6 +30,7 @@ For detailed information about the token request flow, see the [Architecture](./
 
 - **Query Parameters**:
   - `account_id` (string, required): The account ID requesting the challenge
+  - `amount` (number, required): Requested asset amount (in base units).
   - `api_key` (string, optional): API key for authentication
 
 - **Response**: JSON object containing:
