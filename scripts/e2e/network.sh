@@ -10,10 +10,10 @@ set -euo pipefail
 WORK_DIR="${WORK_DIR:-target/e2e}"
 REGISTRY="${REGISTRY:-ghcr.io/0xmiden}"
 PROJECT="${PROJECT:-miden-faucet-e2e}"
-VERSION="${NODE_VERSION:-$(sed -n 's/^miden-node-proto-build *= *{ *version *= *"=\{0,1\}\([^"]*\)".*/\1/p' bin/faucet/Cargo.toml)}"
+VERSION="${NODE_VERSION:-$(sed -n '/^name = "miden-node-proto-build"$/{n;s/^version = "\(.*\)"$/\1/p;}' Cargo.lock)}"
 
 if [[ -z "${VERSION}" ]]; then
-    echo "error: could not read the node version from bin/faucet/Cargo.toml" >&2
+    echo "error: could not read the miden-node-proto-build version from Cargo.lock" >&2
     exit 1
 fi
 
