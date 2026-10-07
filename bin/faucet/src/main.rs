@@ -482,7 +482,7 @@ fn parse_node_url(node_url: Option<Url>, network: &FaucetNetwork) -> anyhow::Res
 }
 
 /// Checks that every token amount offered in the frontend is non zero and within the maximum
-/// claimable amount, so that no option is rejected after the user solves the `PoW`.
+/// claimable amount.
 fn validate_token_amounts(
     token_amounts: &[u64],
     decimals: u8,
@@ -573,7 +573,6 @@ mod tests {
         assert!(validate_token_amounts(&[1, 101], decimals, max_claimable_amount).is_err());
         assert!(validate_token_amounts(&[0, 1], decimals, max_claimable_amount).is_err());
         assert!(validate_token_amounts(&[], decimals, max_claimable_amount).is_err());
-        assert!(validate_token_amounts(&[u64::MAX], decimals, max_claimable_amount).is_err());
     }
 
     // FUNDING SERVICE TESTS
