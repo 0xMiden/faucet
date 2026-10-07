@@ -119,6 +119,7 @@ async fn start_faucet(faucet_url: &str, node_url: &str, funding_service_url: &st
         base_amount: 100_000,
         open_telemetry: false,
         explorer_url: None,
+        token_amounts: vec![1, 10, 100],
     };
 
     std::thread::spawn(move || {
