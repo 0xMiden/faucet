@@ -82,12 +82,9 @@ test:  ## Runs all tests
 # the resulting note.
 .PHONY: test-e2e
 test-e2e: ## Runs the end-to-end test against a real node and funding service
-	cargo build --release --locked -p miden-faucet
 	scripts/e2e/network.sh up
-	scripts/e2e/faucet.sh up
 	cargo test --release --locked -p miden-faucet-client --test e2e -- --ignored --nocapture; \
 	    status=$$?; \
-	    scripts/e2e/faucet.sh down; \
 	    scripts/e2e/network.sh down; \
 	    exit $$status
 

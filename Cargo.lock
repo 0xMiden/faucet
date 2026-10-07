@@ -3429,6 +3429,7 @@ dependencies = [
  "miden-client",
  "miden-client-cli",
  "miden-client-sqlite-store",
+ "miden-faucet",
  "miden-faucet-lib",
  "miden-pow-rate-limiter",
  "rand 0.10.3",

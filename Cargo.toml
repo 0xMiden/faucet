@@ -19,6 +19,7 @@ version      = "0.17.0-rc.3"
 opt-level = 2
 
 [workspace.dependencies]
+miden-faucet           = { path = "bin/faucet", version = "0.17.0-rc.3" }
 miden-faucet-lib       = { path = "crates/faucet", version = "0.17.0-rc.3" }
 miden-pow-rate-limiter = { path = "crates/pow", version = "0.17.0-rc.3" }
 

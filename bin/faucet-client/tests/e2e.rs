@@ -1,10 +1,11 @@
 //! End-to-end test against a real node, funding service and faucet.
 //!
-//! Creates an account, requests tokens for it, waits for the note to be committed, consumes it and
-//! checks the balance. Ignored by default because it needs the network: `make test-e2e` starts
-//! everything and runs it.
+//! Starts a faucet, creates an account, requests tokens for it, waits for the note to be committed,
+//! consumes it and checks the balance. Ignored by default because it needs a node and a funding
+//! service: `make test-e2e` starts them and runs it.
 
 use std::env::temp_dir;
+use std::time::Duration;
 
 use miden_client::account::{AccountId, AccountType};
 use miden_client::builder::ClientBuilder;
@@ -13,9 +14,16 @@ use miden_client::note::{Note, NoteId};
 use miden_client::rpc::Endpoint;
 use miden_client::testing::common::{AccountSetup, TestClient};
 use miden_client_sqlite_store::ClientBuilderSqliteExt;
+use miden_faucet::network::FaucetNetwork;
+use miden_faucet::{Cli, Command, FaucetConfig, run_faucet_command};
 use miden_faucet_client::mint::{FaucetHttpClient, solve_challenge};
 
 const DEFAULT_FAUCET_URL: &str = "http://127.0.0.1:18000";
+const DEFAULT_FUNDING_SERVICE_URL: &str = "http://127.0.0.1:50401";
+
+/// How long the faucet gets to reach the funding service and bind its API.
+const FAUCET_ATTEMPTS: u32 = 60;
+const FAUCET_DELAY: Duration = Duration::from_secs(1);
 
 const REQUEST_TIMEOUT_MS: u64 = 30_000;
 
@@ -32,6 +40,9 @@ const NOTE_MAX_BLOCKS: u32 = 60;
 async fn request_tokens_and_consume_the_note() {
     let faucet_url = env_or("FAUCET_URL", DEFAULT_FAUCET_URL);
     let node_url = env_or("NODE_URL", &Endpoint::localhost().to_string());
+    let funding_service_url = env_or("FUNDING_SERVICE_URL", DEFAULT_FUNDING_SERVICE_URL);
+
+    start_faucet(&faucet_url, &node_url, &funding_service_url).await;
 
     let mut client = build_client(&node_url).await;
 
@@ -74,6 +85,69 @@ async fn request_tokens_and_consume_the_note() {
         "the recipient holds {balance}, more than the {AMOUNT} requested"
     );
     println!("Balance: {balance} of the {AMOUNT} requested, the rest paid the fee");
+}
+
+/// Starts a faucet against the node and the funding service, and waits for it to serve.
+async fn start_faucet(faucet_url: &str, node_url: &str, funding_service_url: &str) {
+    let port = faucet_url
+        .rsplit(':')
+        .next()
+        .and_then(|port| port.parse().ok())
+        .expect("the faucet url should carry a port");
+
+    let command = Command::Start {
+        config: FaucetConfig {
+            node_url: Some(node_url.parse().expect("the node url should be a url")),
+            timeout: Duration::from_secs(5),
+            network: FaucetNetwork::Localhost,
+            api_keys_path: None,
+        },
+        funding_service_url: funding_service_url
+            .parse()
+            .expect("the funding service url should be a url"),
+        decimals: 6,
+        api_bind_port: port,
+        api_public_url: faucet_url.parse().expect("the faucet url should be a url"),
+        frontend_bind_port: 0,
+        no_frontend: true,
+        max_claimable_amount: 1_000_000_000,
+        pow_secret: Some("e2e".to_owned()),
+        pow_challenge_lifetime: Duration::from_secs(30),
+        pow_cleanup_interval: Duration::from_secs(1),
+        pow_growth_rate: 1.0,
+        pow_baseline: 12,
+        base_amount: 100_000,
+        open_telemetry: false,
+        explorer_url: None,
+    };
+
+    std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("the faucet runtime should build");
+
+        runtime.block_on(async {
+            Box::pin(run_faucet_command(Cli { command }))
+                .await
+                .expect("the faucet should serve");
+        });
+    });
+
+    let metadata_url = format!("{faucet_url}/get_metadata");
+    for attempt in 1..=FAUCET_ATTEMPTS {
+        if reqwest::get(&metadata_url)
+            .await
+            .is_ok_and(|response| response.status().is_success())
+        {
+            return;
+        }
+
+        println!("Faucet not serving yet, attempt {attempt}/{FAUCET_ATTEMPTS}");
+        tokio::time::sleep(FAUCET_DELAY).await;
+    }
+
+    panic!("the faucet did not answer on {faucet_url}");
 }
 
 /// Builds a client with its own store and keystore, pointed at the test network.

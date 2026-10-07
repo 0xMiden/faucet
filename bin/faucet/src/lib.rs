@@ -2,8 +2,8 @@ mod api;
 mod api_key;
 mod frontend;
 mod funding_service_client;
-mod logging;
-mod network;
+pub mod logging;
+pub mod network;
 #[cfg(test)]
 mod testing;
 
@@ -199,25 +199,25 @@ pub enum ApiKeyCommand {
 pub struct FaucetConfig {
     /// Path to the file holding the API keys, one key per line.
     #[arg(long = "api-keys-file", value_name = "FILE", env = ENV_API_KEYS)]
-    api_keys_path: Option<PathBuf>,
+    pub api_keys_path: Option<PathBuf>,
 
     /// Timeout for attempting to connect to the node.
     #[arg(long = "timeout", value_name = "DURATION", default_value = "5s", env = ENV_TIMEOUT, value_parser = humantime::parse_duration)]
-    timeout: Duration,
+    pub timeout: Duration,
 
     /// Network configuration to use. Options are `devnet`, `testnet`, `localhost` or a custom
     /// network. It is used to display the correct bech32 addresses in the UI.
     #[arg(long = "network", value_name = "NETWORK", default_value = "localhost", env = ENV_NETWORK)]
-    network: FaucetNetwork,
+    pub network: FaucetNetwork,
 
     /// Node RPC gRPC endpoint in the format `http://<host>[:<port>]`. If not set, the url is derived
     /// from the specified network.
     #[arg(long = "node-url", value_name = "URL", env = ENV_NODE_URL)]
-    node_url: Option<Url>,
+    pub node_url: Option<Url>,
 }
 
 impl Command {
-    fn open_telemetry(&self) -> OpenTelemetry {
+    pub fn open_telemetry(&self) -> OpenTelemetry {
         if matches!(*self, Command::Start { open_telemetry: true, .. }) {
             OpenTelemetry::Enabled
         } else {
@@ -226,22 +226,11 @@ impl Command {
     }
 }
 
-// MAIN
+// COMMANDS
 // =================================================================================================
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
-
-    // Configure tracing with optional OpenTelemetry exporting support.
-    let _otel_guard = logging::setup_tracing(cli.command.open_telemetry())
-        .context("failed to initialize logging")?;
-
-    Box::pin(run_faucet_command(cli)).await
-}
-
 #[allow(clippy::too_many_lines)]
-async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
+pub async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
     // Note: open-telemetry is handled in main.
     match cli.command {
         Command::ApiKey { command } => match command {

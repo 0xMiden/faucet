@@ -32,5 +32,6 @@ url                    = { workspace = true }
 axum                      = { features = ["tokio"], version = "0.8" }
 miden-client              = { features = ["testing"], workspace = true }
 miden-client-sqlite-store = { workspace = true }
+miden-faucet              = { workspace = true }
 serde                     = { workspace = true }
 tokio                     = { features = ["macros", "net", "rt-multi-thread", "time"], workspace = true }
