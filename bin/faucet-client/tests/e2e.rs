@@ -16,7 +16,6 @@ use miden_client_sqlite_store::ClientBuilderSqliteExt;
 use miden_faucet_client::mint::{FaucetHttpClient, solve_challenge};
 
 const DEFAULT_FAUCET_URL: &str = "http://127.0.0.1:18000";
-const DEFAULT_NODE_URL: &str = "http://127.0.0.1:57291";
 
 const REQUEST_TIMEOUT_MS: u64 = 30_000;
 
@@ -32,7 +31,7 @@ const NOTE_MAX_BLOCKS: u32 = 60;
 #[ignore = "needs a node, funding service and faucet, run it with `make test-e2e`"]
 async fn request_tokens_and_consume_the_note() {
     let faucet_url = env_or("FAUCET_URL", DEFAULT_FAUCET_URL);
-    let node_url = env_or("NODE_URL", DEFAULT_NODE_URL);
+    let node_url = env_or("NODE_URL", &Endpoint::localhost().to_string());
 
     let mut client = build_client(&node_url).await;
 
