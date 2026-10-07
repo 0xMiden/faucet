@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.1 (2026-10-07)
+
+- Changed the token amounts in the dropdown menu to be configurable with the `--token-amounts` flag when starting the faucet ([#323](https://github.com/0xMiden/faucet/pull/323)).
+- The `/pow` endpoint now rejects amounts above the maximum claimable amount or the funding account's balance before handing out a challenge ([#323](https://github.com/0xMiden/faucet/pull/323)).
+- Updated the frontend `@miden-sdk/*` dependencies from `0.17.0-rc.5` to `0.17.0` ([#323](https://github.com/0xMiden/faucet/pull/323)).
+
 ## 0.17.0 (2026-10-04)
 
 - [BREAKING] Removed private note support. `/get_tokens` now only creates public notes: the `is_private_note` query parameter was removed, and the `/get_note` and `/send_note` endpoints were removed along with the `--note-transport-url` flag, the `MIDEN_FAUCET_NOTE_TRANSPORT_URL` env var and the `note_transport_url` field of `/get_metadata` ([#309](https://github.com/0xMiden/faucet/pull/309)).
