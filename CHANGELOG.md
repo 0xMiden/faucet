@@ -1,25 +1,22 @@
 # Changelog
 
-## 0.17.0-rc.3 (2026-10-01)
+## 0.17.1 (2026-10-07)
 
-- Updated the Miden dependencies: `miden-protocol` / `miden-standards` / `miden-testing` to v0.17.0-rc.9, `miden-client` / `miden-client-cli` / `miden-client-sqlite-store` to v0.17.0-rc.5, `miden-node-proto-build` to v0.17.0-rc.4, and the frontend SDK and wallet adapter to v0.17.0-rc.5. Bumped the workspace version to 0.17.0-rc.3 ([#319](https://github.com/0xMiden/faucet/pull/319)).
+- Changed the token amounts in the dropdown menu to be configurable with the `--token-amounts` flag when starting the faucet ([#323](https://github.com/0xMiden/faucet/pull/323)).
+- The `/pow` endpoint now rejects amounts above the maximum claimable amount or the funding account's balance before handing out a challenge ([#323](https://github.com/0xMiden/faucet/pull/323)).
+- Updated the frontend `@miden-sdk/*` dependencies from `0.17.0-rc.5` to `0.17.0` ([#323](https://github.com/0xMiden/faucet/pull/323)).
 
-## 0.17.0-rc.2 (2026-09-24)
+## 0.17.0 (2026-10-04)
 
-- Updated the Miden dependencies: `miden-protocol` / `miden-standards` / `miden-testing` to v0.17.0-rc.7, `miden-client` / `miden-client-cli` / `miden-client-sqlite-store` / `miden-node-proto-build` to v0.17.0-rc.3, and the frontend SDK and wallet adapter to v0.17.0-rc.3. Bumped the workspace version to 0.17.0-rc.2.
+- [BREAKING] Removed private note support. `/get_tokens` now only creates public notes: the `is_private_note` query parameter was removed, and the `/get_note` and `/send_note` endpoints were removed along with the `--note-transport-url` flag, the `MIDEN_FAUCET_NOTE_TRANSPORT_URL` env var and the `note_transport_url` field of `/get_metadata` ([#309](https://github.com/0xMiden/faucet/pull/309)).
+- [BREAKING] Integrated the funding service into the faucet. Now the faucet owns no account, and all token requests are forwarded to the funding service instead of being minted. The `init` command is no longer needed, and the `start` command now requires `--funding-service-url` and `--decimals` ([#308](https://github.com/0xMiden/faucet/pull/308)).
+- [BREAKING] Removed the `init` command. The faucet now requires no initialization and can be started just with the `start` command ([#310](https://github.com/0xMiden/faucet/pull/310)).
+- Removed the `miden-client` and `miden-client-sqlite-store` dependencies from the backend, which now uses `miden-protocol` directly. The API keys are now persisted in a newline-delimited file, configurable with `--api-keys-file` / `MIDEN_FAUCET_API_KEYS`. The mint transaction code and the note screener were also removed ([#310](https://github.com/0xMiden/faucet/pull/310)).
+- Redesigned the faucet frontend: new hero illustration and typography, a single send button (notes are always public), inline minting and result views, a stats card for issuance and the faucet address, dark mode, and the Bread wallet logo on the connect button ([#306](https://github.com/0xMiden/faucet/pull/306) ([#312](https://github.com/0xMiden/faucet/pull/312))).
 - [BREAKING] Removed `transaction_id` from the expected funding service token request response and the corresponding `tx_id` from the `/get_tokens` response, and updated the frontend accordingly. The frontend no longer shows a "Faucet unavailable" error when requesting tokens ([#316](https://github.com/0xMiden/faucet/pull/316)).
 - Fixed the position of the error element in the frontend, to prevent an error from stretching the page ([#316](https://github.com/0xMiden/faucet/pull/316)).
 - Fixed the `start` command so that it no longer fails if the default API keys file `api_keys.txt` does not exist ([#316](https://github.com/0xMiden/faucet/pull/316)).
-
-## 0.17.0-rc.1 (2026-09-23)
-
-- Updated the Miden dependencies: `miden-protocol` / `miden-standards` / `miden-testing` to v0.17.0-rc.6, `miden-client` / `miden-client-cli` / `miden-client-sqlite-store` / `miden-node-proto-build` to v0.17.0-rc.2, and the frontend SDK and wallet adapter to v0.17.0-rc.2. Bumped the workspace version to 0.17.0-rc.1.
-- Redesigned the faucet frontend: new hero illustration and typography, a single send button (notes are always public), inline minting and result views, a stats card for issuance and the faucet address, dark mode, and the Bread wallet logo on the connect button ([#306](https://github.com/0xMiden/faucet/pull/306) ([#312](https://github.com/0xMiden/faucet/pull/312))).
-- [BREAKING] Removed the `init` command. The faucet now requires no initialization and can be started just with the `start` command ([#310](https://github.com/0xMiden/faucet/pull/310)).
-- Removed the `miden-client` and `miden-client-sqlite-store` dependencies from the backend, which now uses `miden-protocol` directly. The API keys are now persisted in a newline-delimited file, configurable with `--api-keys-file` / `MIDEN_FAUCET_API_KEYS`. The mint transaction code and the note screener were also removed ([#310](https://github.com/0xMiden/faucet/pull/310)).
-- [BREAKING] Integrated the funding service into the faucet. Now the faucet owns no account, and all token requests are forwarded to the funding service instead of being minted. The `init` command is no longer needed, and the `start` command now requires `--funding-service-url` and `--decimals` ([#308](https://github.com/0xMiden/faucet/pull/308)).
-- Updated the Miden dependencies to the 0.17 protocol: `miden-client` / `miden-client-cli` / `miden-client-sqlite-store` / `miden-node-proto-build` to v0.17.0-rc.1, `miden-testing` to v0.17.0-rc.5, and the frontend SDK and wallet adapter to v0.17.0-rc.1 ([#308](https://github.com/0xMiden/faucet/pull/308)).
-- [BREAKING] Removed private note support. `/get_tokens` now only creates public notes: the `is_private_note` query parameter was removed, and the `/get_note` and `/send_note` endpoints were removed along with the `--note-transport-url` flag, the `MIDEN_FAUCET_NOTE_TRANSPORT_URL` env var and the `note_transport_url` field of `/get_metadata` ([#309](https://github.com/0xMiden/faucet/pull/309)).
+- Updated the Miden dependencies to v0.17 releases.
 
 ## 0.16.0 (2026-09-08)
 

@@ -17,6 +17,7 @@ pub struct Metadata {
     pub decimals: u8,
     pub explorer_url: Option<Url>,
     pub base_amount: u64,
+    pub token_amounts: Vec<u64>,
 }
 
 // ENDPOINT
@@ -42,6 +43,7 @@ pub async fn get_metadata(State(server): State<ApiServer>) -> Json<GetMetadataRe
         explorer_url: metadata.explorer_url,
         pow_load_difficulty: server.rate_limiter.get_load_difficulty(ApiKey::default()),
         base_amount: metadata.base_amount,
+        token_amounts: metadata.token_amounts,
         balance,
     })
 }
@@ -54,6 +56,7 @@ pub struct GetMetadataResponse {
     pub explorer_url: Option<Url>,
     pub pow_load_difficulty: u64,
     pub base_amount: u64,
+    pub token_amounts: Vec<u64>,
     /// The funding account's remaining balance in base units, if the funding service answered.
     pub balance: Option<u64>,
 }

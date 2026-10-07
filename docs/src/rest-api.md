@@ -30,6 +30,7 @@ For detailed information about the token request flow, see the [Architecture](./
 
 - **Query Parameters**:
   - `account_id` (string, required): The account ID requesting the challenge
+  - `amount` (number, required): Requested asset amount (in base units).
   - `api_key` (string, optional): API key for authentication
 
 - **Response**: JSON object containing:
@@ -63,6 +64,7 @@ For detailed information about the token request flow, see the [Architecture](./
   - `id` (string): address of the funding service account the notes are sent from
   - `decimals` (number): number of decimals of the token minted by the faucet. It is needed to convert base units into token amounts.
   - `explorer_url` (string): URL to view the transaction in the explorer. Only present if available for the current network.
+  - `token_amounts` (array of numbers): token amounts offered in the frontend, in whole tokens.
 
 ## Rate Limiting
 
