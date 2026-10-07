@@ -10,14 +10,12 @@ export class UIController {
         this.faucetAddressLoader = document.getElementById('faucet-address-loader');
         this.remainingFunds = document.getElementById('remaining-funds');
         this.remainingFundsLoader = document.getElementById('remaining-funds-loader');
-        this.tokenAmountHint = document.getElementById('token-amount-hint');
         this.explorerUrl = null;
     }
 
-    setupEventListeners(onSendTokens, onWalletConnect, onTokenSelect) {
+    setupEventListeners(onSendTokens, onWalletConnect) {
         this.sendButton.addEventListener('click', () => onSendTokens());
         this.walletConnectButton.addEventListener('click', onWalletConnect);
-        this.tokenSelect.addEventListener('change', (event) => onTokenSelect(event.target.value));
         this.recipientInput.addEventListener('input', () => this.syncSendButton());
         this.syncSendButton();
     }
@@ -179,10 +177,6 @@ export class UIController {
         const errorMessage = document.getElementById('home-error-message');
         errorMessage.classList.remove('visible');
         errorMessage.classList.remove('pending');
-    }
-
-    setTokenHint(estimatedTime) {
-        this.tokenAmountHint.textContent = `Larger amounts take more time to mint. Estimated: ${estimatedTime}`;
     }
 
     setTokenOptions(tokenAmountOptions, decimals) {

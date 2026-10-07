@@ -16,8 +16,6 @@ export class MidenFaucetApp {
         this.nodeUrl = null;
         this.rpcClient = null;
         this.wasmReady = null;
-        this.baseAmount = null;
-        this.powLoadDifficulty = null;
 
         // Check if Web Crypto API is available
         if (!window.crypto || !window.crypto.subtle) {
@@ -89,8 +87,7 @@ export class MidenFaucetApp {
     setupEventListeners() {
         const onSendTokens = () => this.handleSendTokens();
         const onWalletConnect = () => this.handleWalletButtonClick();
-        const onTokenSelect = (requestedAmount) => this.updateTokenHint(requestedAmount);
-        this.ui.setupEventListeners(onSendTokens, onWalletConnect, onTokenSelect);
+        this.ui.setupEventListeners(onSendTokens, onWalletConnect);
     }
 
     async connectWallet() {
@@ -170,8 +167,6 @@ export class MidenFaucetApp {
         const data = await getMetadata(this.apiUrl);
 
         this.decimals = data.decimals;
-        this.powLoadDifficulty = data.pow_load_difficulty;
-        this.baseAmount = data.base_amount;
         this.ui.setRemainingFunds(data.balance, data.decimals);
 
         if (!this.metadataInitialized) {
@@ -179,37 +174,7 @@ export class MidenFaucetApp {
             this.ui.setFaucetId(data.id);
             this.ui.setExplorerUrl(data.explorer_url);
             this.ui.setTokenOptions(data.token_amounts, data.decimals);
-            this.updateTokenHint(Utils.tokensToBaseUnits(data.token_amounts[0], data.decimals));
         }
-    }
-
-    updateTokenHint(requestedAmount) {
-        const estimatedTime = this.computePowTimeEstimation(requestedAmount, this.baseAmount, this.powLoadDifficulty);
-        this.ui.setTokenHint(estimatedTime);
-    }
-
-    computePowTimeEstimation(requestedAmount, baseAmount, loadDifficulty) {
-        const requestComplexity =
-            Math.floor(requestedAmount / Number(baseAmount)) + 1;
-        const difficulty = requestComplexity * Number(loadDifficulty);
-        const difficultyBits = Math.log2(difficulty);
-
-        let estimatedTime;
-        if (difficultyBits <= 17) {
-            estimatedTime = `<5s`;
-        } else if (difficultyBits <= 18) {
-            estimatedTime = `5-15s`;
-        } else if (difficultyBits <= 19) {
-            estimatedTime = `15-30s`;
-        } else if (difficultyBits <= 20) {
-            estimatedTime = `30s-1m`;
-        } else if (difficultyBits <= 21) {
-            estimatedTime = `1-5m`;
-        } else {
-            estimatedTime = `5m+`;
-        }
-
-        return estimatedTime;
     }
 
     pollNote(noteId) {
