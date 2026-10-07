@@ -55,6 +55,7 @@ const ENV_API_KEYS: &str = "MIDEN_FAUCET_API_KEYS";
 const ENV_DECIMALS: &str = "MIDEN_FAUCET_DECIMALS";
 const ENV_EXPLORER_URL: &str = "MIDEN_FAUCET_EXPLORER_URL";
 const ENV_FUNDING_SERVICE_URL: &str = "MIDEN_FAUCET_FUNDING_SERVICE_URL";
+const ENV_TOKEN_AMOUNTS: &str = "MIDEN_FAUCET_TOKEN_AMOUNTS";
 
 // COMMANDS
 // ================================================================================================
@@ -150,6 +151,11 @@ pub enum Command {
         /// base_amount) + 1`
         #[arg(long = "base-amount", value_name = "U64", env = ENV_BASE_AMOUNT, default_value = "100000000")]
         base_amount: u64,
+
+        /// The token amounts offered in the frontend, in whole tokens (not base units), separated
+        /// by commas. Each one must be within the maximum claimable amount.
+        #[arg(long = "token-amounts", value_name = "U64", env = ENV_TOKEN_AMOUNTS, value_delimiter = ',', default_value = "1,10,100")]
+        token_amounts: Vec<u64>,
 
         /// Enables the exporting of traces for OpenTelemetry.
         ///
@@ -294,6 +300,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
             pow_growth_rate,
             pow_baseline,
             base_amount,
+            token_amounts,
             open_telemetry: _,
             explorer_url,
             decimals,
@@ -321,6 +328,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 max_claimable_amount,
                 funding_status.max_amount,
             );
+            validate_token_amounts(&token_amounts, decimals, max_claimable_amount)?;
 
             tracing::info!(
                 target: COMPONENT,
@@ -350,6 +358,7 @@ async fn run_faucet_command(cli: Cli) -> anyhow::Result<()> {
                 decimals,
                 explorer_url,
                 base_amount,
+                token_amounts,
             };
 
             // Use a random secret if not explicitly provided.
@@ -472,6 +481,30 @@ fn parse_node_url(node_url: Option<Url>, network: &FaucetNetwork) -> anyhow::Res
     Url::parse(&url).with_context(|| format!("failed to parse node url: {url}"))
 }
 
+/// Checks that every token amount offered in the frontend is non zero and within the maximum
+/// claimable amount.
+fn validate_token_amounts(
+    token_amounts: &[u64],
+    decimals: u8,
+    max_claimable_amount: AssetAmount,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(!token_amounts.is_empty(), "at least one token amount is required");
+
+    let base_units_per_token = 10u64
+        .checked_pow(u32::from(decimals))
+        .with_context(|| format!("{decimals} decimals overflow a u64"))?;
+    for &amount in token_amounts {
+        anyhow::ensure!(amount > 0, "token amounts must be greater than zero");
+        let base_units = amount.checked_mul(base_units_per_token);
+        anyhow::ensure!(
+            base_units.is_some_and(|base_units| base_units <= max_claimable_amount.base_units()),
+            "the token amount {amount} exceeds the maximum claimable amount of {max_claimable_amount} base units",
+        );
+    }
+
+    Ok(())
+}
+
 // TESTS
 // =================================================================================================
 
@@ -485,6 +518,7 @@ mod tests {
     use clap::Parser;
     use clap::error::ErrorKind;
     use fantoccini::ClientBuilder;
+    use miden_faucet_lib::types::AssetAmount;
     use miden_protocol::account::AccountId;
     use miden_protocol::address::{Address, NetworkId};
     use miden_protocol::testing::account_id::ACCOUNT_ID_REGULAR_PUBLIC_ACCOUNT_IMMUTABLE_CODE;
@@ -500,7 +534,7 @@ mod tests {
     use crate::network::FaucetNetwork;
     use crate::testing::stub_funding_service::{STUB_MAX_AMOUNT, serve_stub_funding_service};
     use crate::testing::stub_rpc_api::serve_stub;
-    use crate::{Cli, FaucetConfig, run_faucet_command};
+    use crate::{Cli, FaucetConfig, run_faucet_command, validate_token_amounts};
 
     // CLI TESTS
     // ---------------------------------------------------------------------------------------------
@@ -528,6 +562,17 @@ mod tests {
         };
         assert_eq!(error.kind(), ErrorKind::MissingRequiredArgument);
         assert!(error.to_string().contains("--decimals"));
+    }
+
+    #[test]
+    fn token_amounts_must_be_within_the_maximum_claimable_amount() {
+        let max_claimable_amount = AssetAmount::new(100_000_000).unwrap();
+        let decimals = 6;
+
+        assert!(validate_token_amounts(&[1, 10, 100], decimals, max_claimable_amount).is_ok());
+        assert!(validate_token_amounts(&[1, 101], decimals, max_claimable_amount).is_err());
+        assert!(validate_token_amounts(&[0, 1], decimals, max_claimable_amount).is_err());
+        assert!(validate_token_amounts(&[], decimals, max_claimable_amount).is_err());
     }
 
     // FUNDING SERVICE TESTS
@@ -787,6 +832,7 @@ mod tests {
                         pow_growth_rate: 1.0,
                         pow_baseline: 12,
                         base_amount: 100_000,
+                        token_amounts: vec![1, 10, 100],
                         open_telemetry: false,
                         explorer_url: None,
                     },

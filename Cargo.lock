@@ -3154,9 +3154,9 @@ dependencies = [
 
 [[package]]
 name = "miden-client"
-version = "0.17.0"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0eb60ffa02829dd9372181c825e9624ffbe7970fcb9d7d50e9c5c7e307322471"
+checksum = "16be0855c2e56e5ec461976527f1d1ee65a70546f2fbd46d7a5df33ad37b199e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3195,9 +3195,9 @@ dependencies = [
 
 [[package]]
 name = "miden-client-cli"
-version = "0.17.0"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ffffe22fb1771aed6333eeb8567dc2c73d6e34fc1326bf003789ada3272664b"
+checksum = "a3a9244d3cd48f2feead35686221d297500ab25e92711695b404a4cc1f4d426f"
 dependencies = [
  "clap",
  "comfy-table",
@@ -3387,7 +3387,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3433,7 +3433,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet-client"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -3454,7 +3454,7 @@ dependencies = [
 
 [[package]]
 name = "miden-faucet-lib"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "miden-protocol",
  "serde",
@@ -3628,7 +3628,7 @@ dependencies = [
 
 [[package]]
 name = "miden-pow-rate-limiter"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "serde_json",
  "sha2 0.10.9",

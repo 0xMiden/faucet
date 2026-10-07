@@ -11,7 +11,6 @@ const MINUTE = 60 * SECOND;
 export class MidenFaucetApp {
     constructor() {
         this.ui = new UIController();
-        this.tokenAmountOptions = [100, 500, 1000];
         this.metadataInitialized = false;
         this.apiUrl = null;
         this.nodeUrl = null;
@@ -179,8 +178,8 @@ export class MidenFaucetApp {
             this.metadataInitialized = true;
             this.ui.setFaucetId(data.id);
             this.ui.setExplorerUrl(data.explorer_url);
-            this.ui.setTokenOptions(this.tokenAmountOptions, data.decimals);
-            this.updateTokenHint(this.tokenAmountOptions[0]);
+            this.ui.setTokenOptions(data.token_amounts, data.decimals);
+            this.updateTokenHint(Utils.tokensToBaseUnits(data.token_amounts[0], data.decimals));
         }
     }
 

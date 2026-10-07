@@ -43,6 +43,7 @@ The Miden Faucet can be configured using:
 | `--api-keys-file` | Path to the API keys file | `api_keys.txt` | No |
 | `--explorer-url` | Midenscan URL | - | No |
 | `--base-amount` | Token amount (in base units) at which the difficulty of the challenge starts to increase. | `100000000` | No |
+| `--token-amounts` | Comma-separated token amounts offered in the frontend, in whole tokens. Each one must be within `--max-claimable-amount`. | `1,10,100` | No |
 
 `start` reads the funding service's `/status` before serving and fails if it cannot be reached. It
 also fails if `--max-claimable-amount` is larger than the funding service's own maximum, since the
@@ -80,6 +81,7 @@ export MIDEN_FAUCET_MAX_CLAIMABLE_AMOUNT=1000000000
 export MIDEN_FAUCET_API_KEYS=api_keys.txt
 export MIDEN_FAUCET_ENABLE_OTEL=true
 export MIDEN_FAUCET_BASE_AMOUNT=100000000
+export MIDEN_FAUCET_TOKEN_AMOUNTS=1,10,100
 
 # Network & Node Configuration
 export MIDEN_FAUCET_NODE_URL=https://rpc.testnet.miden.io
