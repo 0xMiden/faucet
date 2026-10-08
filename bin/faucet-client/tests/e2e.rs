@@ -195,6 +195,8 @@ async fn request_tokens(faucet_url: &str, account_id: AccountId) -> NoteId {
 
 /// Syncs until the note is committed and consumable by the account.
 async fn wait_for_note(client: &mut TestClient, account_id: AccountId, note_id: NoteId) -> Note {
+    client.sync_state().await.expect("the client should sync");
+
     let consumable = client
         .wait_for_consumable_notes(account_id, NOTE_MAX_BLOCKS)
         .await
