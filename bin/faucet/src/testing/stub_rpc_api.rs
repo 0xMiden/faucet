@@ -135,6 +135,13 @@ impl node_service_server::NodeService for StubRpcApi {
         unimplemented!()
     }
 
+    async fn is_invitation_code_valid(
+        &self,
+        _request: Request<proto::rpc::IsInvitationCodeValidRequest>,
+    ) -> Result<Response<proto::rpc::IsInvitationCodeValidResponse>, Status> {
+        unimplemented!()
+    }
+
     async fn get_block_by_number(
         &self,
         _request: Request<proto::rpc::GetBlockByNumberRequest>,
