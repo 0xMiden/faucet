@@ -27,9 +27,10 @@ export MIDEN_FUNDING_SERVICE_IMAGE="${REGISTRY}/miden-funding-service:v${VERSION
 export MIDEN_USDCX_GENESIS_IMAGE="${REGISTRY}/miden-usdcx-genesis:v${VERSION}"
 
 # By default, the node's bootstrap runs a live key generation ceremony between the three validators,
-# which sometimes fails with "peer completion was not confirmed". This makes the bootstrap copy
-# pre-generated insecure test keys from the node repo instead. The faucet test does not depend on
-# how the validators get their keys.
+# which sometimes fails with "peer completion was not confirmed".
+# Setting `MIDEN_VALIDATOR_USE_STORAGE_KEY_FIXTURE` to true makes the bootstrap skip the key
+# generation ceremony and copy pre-generated insecure test keys from the node repo instead.
+# The faucet test does not depend on how the validators get their keys.
 export MIDEN_VALIDATOR_USE_STORAGE_KEY_FIXTURE=true
 
 compose() {
