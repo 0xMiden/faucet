@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.18.0 (TBD)
+## 0.18.0 (2026-11-17)
 
 - Updated the Miden dependencies: `miden-client` / `miden-client-cli` / `miden-client-sqlite-store` / `miden-protocol` / `miden-standards` / `miden-testing` / `miden-node-proto-build` to v0.18, and the frontend `@miden-sdk` dependencies to `0.18.0`. Bumped the workspace version to 0.18.0 ([#327](https://github.com/0xMiden/faucet/pull/327)).
 
