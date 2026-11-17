@@ -5,13 +5,6 @@ use std::{env, fs};
 fn main() {
     println!("cargo:rerun-if-changed=frontend");
 
-    // Generate the node RPC protobuf bindings used by the stub node in tests. The generated code
-    // is only referenced from the `#[cfg(test)]` testing module.
-    tonic_prost_build::configure()
-        .build_client(false)
-        .compile_fds(miden_node_proto_build::rpc_api_descriptor())
-        .expect("node RPC protos should compile");
-
     let build_dir = env::var("OUT_DIR").expect("OUT_DIR should be set");
     let target_dir = Path::new(&build_dir).join("frontend");
 

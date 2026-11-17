@@ -3391,7 +3391,6 @@ name = "miden-faucet"
 version = "0.18.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "axum",
  "axum-extra",
  "base64 0.22.1",
@@ -3402,11 +3401,9 @@ dependencies = [
  "http 1.5.0",
  "humantime",
  "miden-faucet-lib",
- "miden-node-proto-build",
  "miden-pow-rate-limiter",
  "miden-protocol",
  "miden-standards",
- "miden-testing",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
@@ -3418,11 +3415,7 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 2.0.21",
  "tokio",
- "tokio-stream",
  "tonic",
- "tonic-prost",
- "tonic-prost-build",
- "tonic-web",
  "tower",
  "tower-http",
  "tracing",
@@ -3448,7 +3441,6 @@ dependencies = [
  "miden-pow-rate-limiter",
  "rand 0.10.3",
  "reqwest",
- "serde",
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
@@ -3633,7 +3625,6 @@ dependencies = [
 name = "miden-pow-rate-limiter"
 version = "0.18.0"
 dependencies = [
- "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.21",
  "tokio",
@@ -6646,24 +6637,6 @@ dependencies = [
  "syn 2.0.119",
  "tempfile",
  "tonic-build",
-]
-
-[[package]]
-name = "tonic-web"
-version = "0.14.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5e6a1b6319ca4b61a4c0f0c94d439c8f3ed344cca56fe0df40e1fe4be11380b"
-dependencies = [
- "base64 0.22.1",
- "bytes",
- "http 1.5.0",
- "http-body",
- "pin-project",
- "tokio-stream",
- "tonic",
- "tower-layer",
- "tower-service",
- "tracing",
 ]
 
 [[package]]

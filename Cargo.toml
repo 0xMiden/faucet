@@ -6,10 +6,8 @@ resolver = "2"
 [workspace.package]
 authors      = ["Miden contributors"]
 edition      = "2024"
-exclude      = [".github/"]
 homepage     = "https://miden.xyz"
 license      = "MIT"
-readme       = "README.md"
 repository   = "https://github.com/0xMiden/faucet"
 rust-version = "1.98.1"
 version      = "0.18.0"
@@ -45,7 +43,6 @@ serde_json            = { version = "1.0" }
 sha2                  = { version = "0.10" }
 thiserror             = { default-features = false, version = "2.0" }
 tokio                 = { features = ["rt-multi-thread"], version = "1.49" }
-tokio-stream          = { version = "0.1" }
 tonic                 = { version = "0.14" }
 tower                 = { version = "0.5" }
 tower-http            = { features = ["cors", "trace"], version = "0.6" }

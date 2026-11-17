@@ -522,7 +522,7 @@ mod tests {
     use crate::funding_service_client::FundingServiceClient;
     use crate::network::FaucetNetwork;
     use crate::testing::stub_funding_service::{STUB_MAX_AMOUNT, serve_stub_funding_service};
-    use crate::testing::stub_rpc_api::serve_stub;
+    use crate::testing::stub_node::serve_stub;
     use crate::{Cli, FaucetConfig, run_faucet_command, validate_token_amounts};
 
     // CLI TESTS
