@@ -14,7 +14,7 @@ use tokio::net::TcpListener;
 /// The largest amount the stub accepts, mirroring the service's own cap.
 pub const STUB_MAX_AMOUNT: u64 = 1_000_000_000_000;
 
-/// Serves the stub on an already-bound listener. See [`crate::testing::stub_rpc_api::serve_stub`]
+/// Serves the stub on an already-bound listener. See [`crate::testing::stub_node::serve_stub`]
 /// for why the caller binds it.
 pub async fn serve_stub_funding_service(listener: TcpListener) -> anyhow::Result<()> {
     let app = Router::new()

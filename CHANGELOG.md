@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.0 (2026-11-17)
+
+- Updated the Miden dependencies: `miden-client` / `miden-client-cli` / `miden-client-sqlite-store` / `miden-protocol` / `miden-standards` / `miden-testing` / `miden-node-proto-build` to v0.18, and the frontend `@miden-sdk` dependencies to `0.18.0`. Bumped the workspace version to 0.18.0 ([#327](https://github.com/0xMiden/faucet/pull/327)).
+- Removed unused dependencies and the node RPC stubs that were generated on every build ([#330](https://github.com/0xMiden/faucet/pull/330)).
+
 ## 0.17.1 (2026-10-07)
 
 - Changed the token amounts in the dropdown menu to be configurable with the `--token-amounts` flag when starting the faucet ([#323](https://github.com/0xMiden/faucet/pull/323)).
